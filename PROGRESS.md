@@ -10,7 +10,7 @@ Termín: v pondělí 9. 11. 2026 odcvičit Silový trénink A v appce. Nutné js
 | --- | --- | --- |
 | 0 | git, .gitignore, README, kostra PWA (ikona, manifest, service worker), GitHub repozitář a Pages | hotovo |
 | 1 | Apps Script přes clasp, 9 listů, sloupce ID a vzorec Objem, 34 cviků, rutina A (P2), list Tělo z inbody | hotovo |
-| 2 | zápis tréninku jako v Hevy, offline, fronta k odeslání | hotovo, čeká test na iPhonu |
+| 2 | zápis tréninku jako v Hevy, offline, fronta k odeslání | hotovo |
 | 3 | import historie z Hevy skriptem (zkušební běh, pak odeslání) | čeká |
 | 4 | přehledy ze vzorců: Maxima, Objem po týdnech, Poslední trénink, Tento týden | čeká |
 | 5 | souhrn do Stravy: název, popis, obrázek Ember se svalovou mapou | čeká |
@@ -79,8 +79,8 @@ Verze 0.2.1 (3. 11., po prvním testu na iPhonu):
 - Na iPhonu ověřeno: nastavení se skutečným skriptem, obnova rozpracovaného tréninku po zavření.
 
 Zbývá:
-- Oliver: na iPhonu znovu čas u vesla, štítek v režimu letadlo, série v tabulce po vypnutí režimu letadlo.
-- Neověřeno: skutečný skript s klíčem z appky (klíč Claude Code nemá), pípnutí a Wake Lock na iPhonu.
+- nic. Na iPhonu ověřeno (3. 11.): čas u vesla, štítek Čeká na odeslání v režimu letadlo, série v tabulce po návratu signálu.
+- Neověřeno: pípnutí a Wake Lock při skutečném tréninku.
 
 ## Další krok: etapa 3
 
