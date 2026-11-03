@@ -1,0 +1,20 @@
+# Osobní zadání a pokyny (obsahují osobní údaje)
+SPEC.md
+CLAUDE.md
+
+# Osobní data, exporty a zálohy (nikdy do veřejného repozitáře)
+*.csv
+data/
+inbody/
+*.local.*
+.env
+.env.*
+
+# Apps Script / clasp (ID skriptu a přihlašovací údaje)
+.clasp.json
+.clasprc.json
+
+# Nástroje
+node_modules/
+.claude/
+.DS_Store

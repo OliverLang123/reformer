@@ -1,0 +1,44 @@
+{
+  "label": "Silový trénink B",
+  "title": "Záda + biceps + předloktí",
+  "date": "2026-11-12",
+  "totalVolumeKg": 128450,
+  "workingSets": 1,
+  "theme": {
+    "accent": "#FF6A2B"
+  },
+  "exercises": [
+    {
+      "name": "Lat Pulldown - Wide Grip Neutral Handle",
+      "equipment": "Cable",
+      "top": {
+        "weightKg": 82.5,
+        "reps": 8
+      },
+      "previous": {
+        "weightKg": 85,
+        "reps": 8
+      }
+    },
+    {
+      "name": "Barbell Row",
+      "equipment": "Barbell",
+      "top": {
+        "weightKg": 70,
+        "reps": 6
+      },
+      "previous": {
+        "weightKg": 70,
+        "reps": 8
+      }
+    },
+    {
+      "name": "Hammer Curl",
+      "equipment": "Dumbbell",
+      "top": {
+        "weightKg": 17.5,
+        "reps": 12
+      }
+    }
+  ]
+}

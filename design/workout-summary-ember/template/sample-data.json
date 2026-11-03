@@ -1,0 +1,61 @@
+{
+  "label": "Silový trénink A",
+  "title": "Nohy + core",
+  "date": "2026-11-09",
+  "totalVolumeKg": 9870,
+  "workingSets": 24,
+  "theme": {
+    "accent": "#FF6A2B"
+  },
+  "exercises": [
+    {
+      "name": "Squat",
+      "equipment": "Barbell",
+      "top": {
+        "weightKg": 100,
+        "reps": 10
+      },
+      "previous": {
+        "weightKg": 100,
+        "reps": 10
+      }
+    },
+    {
+      "name": "Romanian Deadlift",
+      "equipment": "Barbell",
+      "top": {
+        "weightKg": 50,
+        "reps": 10
+      },
+      "previous": {
+        "weightKg": 30,
+        "reps": 10
+      },
+      "isPR": true
+    },
+    {
+      "name": "Bulgarian Split Squat",
+      "equipment": "Dumbbell",
+      "top": {
+        "weightKg": 40,
+        "reps": 10
+      },
+      "previous": {
+        "weightKg": 40,
+        "reps": 8
+      }
+    },
+    {
+      "name": "Hip Thrust",
+      "equipment": "Barbell",
+      "top": {
+        "weightKg": 70,
+        "reps": 10
+      },
+      "previous": {
+        "weightKg": 50,
+        "reps": 9
+      }
+    }
+  ]
+}
