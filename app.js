@@ -1,5 +1,5 @@
 import { html, render, useState, useEffect, useMemo, useRef } from './vendor/htm-preact.module.js';
-import { fmtNum, fmtInt, fmtTime, fmtDuration, fmtDate, norm, plural, parseTimeInput } from './js/util.js';
+import { fmtNum, fmtInt, fmtTime, fmtDuration, fmtDate, norm, plural, parseTimeInput, typeTime } from './js/util.js';
 import {
   getConfig, setConfig, getActive, setActive as storeActive, call, loadCachedData, refreshData,
   getQueue, queueStatus, onQueueChange, enqueueSave, enqueueDelete, flushQueue,
@@ -10,7 +10,7 @@ import {
 } from './js/model.js';
 import * as W from './js/workout.js';
 
-export const VERSION = '0.2.0';
+export const VERSION = '0.2.1';
 
 // ---------- zvuk, displej, čas ----------
 
@@ -213,10 +213,10 @@ function SetRow({ w, ex, set, idx, info, prev, onUpdate, onConfirm, onType }) {
         });
         return n;
       }, false);
-    }}>${prev ? fmtSet(prev, info.mode).replace(/ × /g, '×') : '-'}</button>
+    }}>${prev ? fmtSet(prev, info.mode).replace(/ × /g, '×').replace(' km', 'km') : '-'}</button>
     ${fields.map((f) => html`<input class=${'val f-' + f} type="text" inputmode=${mode[f]} enterkeyhint="done"
       value=${set.input[f]} placeholder=${placeholder(f)}
-      onInput=${(e) => onUpdate((cur) => W.updateInput(cur, ex.key, set.id, f, e.target.value), false)}
+      onInput=${(e) => onUpdate((cur) => W.updateInput(cur, ex.key, set.id, f, f === 'time' ? typeTime(e.target.value) : e.target.value), false)}
       onBlur=${(e) => {
         if (f === 'time' && e.target.value) {
           const s = parseTimeInput(e.target.value);
@@ -369,16 +369,18 @@ function Workout({ model, w, qs, onUpdate, onFinish, onDiscard, onHome }) {
   return html`<main class="workout">
     <header class="wbar">
       <button class="link" onClick=${onHome}>Úvod</button>
-      <div class="wstats">
-        <span><small>Délka</small>${fmtTime(Math.floor((now - new Date(w.start).getTime()) / 1000))}</span>
-        <span><small>Objem</small>${fmtInt(st.volume)} kg</span>
-        <span><small>Série</small>${st.sets}</span>
+      <div class="wmid">
+        <div class="wstats">
+          <span><small>Délka</small>${fmtTime(Math.floor((now - new Date(w.start).getTime()) / 1000))}</span>
+          <span><small>Objem</small>${fmtInt(st.volume)} kg</span>
+          <span><small>Série</small>${st.sets}</span>
+        </div>
+        <${SyncPill} qs=${qs} />
       </div>
       <button class="primary" onClick=${onFinish}>Dokončit</button>
     </header>
     <div class="wtitle">
       <input class="title-input" value=${w.title} onInput=${(e) => onUpdate((cur) => W.patch(cur, (n) => { n.title = e.target.value; }), false)} />
-      <${SyncPill} qs=${qs} />
     </div>
     ${w.routineNote && html`<p class="pinned">📌 ${w.routineNote}</p>`}
     ${w.exercises.map((ex) => html`<${ExerciseCard} key=${ex.key} w=${w} ex=${ex} model=${model}

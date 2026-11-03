@@ -52,6 +52,14 @@ export function parseTimeInput(v) {
   return parseInt(d.slice(0, -2), 10) * 60 + parseInt(d.slice(-2), 10);
 }
 
+// Během psaní na numerické klávesnici (bez dvojtečky): "9" -> "9", "912" -> "9:12", "10512" -> "1:05:12"
+export function typeTime(v) {
+  const d = String(v || '').replace(/\D/g, '').replace(/^0+(?=\d{3})/, '').slice(0, 6);
+  if (d.length <= 2) return d;
+  if (d.length <= 4) return `${d.slice(0, -2)}:${d.slice(-2)}`;
+  return `${d.slice(0, -4)}:${d.slice(-4, -2)}:${d.slice(-2)}`;
+}
+
 export function fmtTime(sec) {
   if (sec === null || sec === undefined) return '';
   const s = Math.max(0, Math.round(sec));

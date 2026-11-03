@@ -1,5 +1,5 @@
 // Při každé změně souborů appky zvyš verzi, ať si telefon stáhne novou kopii.
-const CACHE = 'reformer-v0.2.0';
+const CACHE = 'reformer-v0.2.1';
 
 const SHELL = [
   './',

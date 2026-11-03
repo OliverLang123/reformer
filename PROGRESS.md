@@ -72,8 +72,14 @@ Hotovo (3. 11.), verze appky 0.2.0:
 - Ověřeno v prohlížeči (mobilní velikost) proti náhradnímu API s vymyšlenými daty: MINULE, objemy (na stranu × 2, vlastní váha, veslo 0), nové maximum, superset bez odpočinku, fronta bez signálu a dopsání po návratu, zahození smaže i v tabulce, obnova po znovunačtení, čas 912 = 9:12.
 - Opravená chyba: změny tréninku se dřív počítaly z kopie stavu z dřívějšího vykreslení a úklid doběhlého odpočinku tak přepsal novější údaje (ztratil se čas vesla). Teď `onUpdate` dostává funkci nad aktuálním tréninkem (`activeRef`).
 
+Verze 0.2.1 (3. 11., po prvním testu na iPhonu):
+- Čas se doplňuje dvojtečkou už při psaní na numerické klávesnici (`typeTime`: 912 → 9:12). Dřív až po opuštění pole a na iPhonu nešel zadat.
+- Stav Uloženo / Čeká na odeslání je v horní liště tréninku (dřív vedle názvu a po posunutí zmizel).
+- MINULE u vesla zkrácené (2km 9:12).
+- Na iPhonu ověřeno: nastavení se skutečným skriptem, obnova rozpracovaného tréninku po zavření.
+
 Zbývá:
-- Oliver: na iPhonu zadat adresu skriptu a klíč, zkušební trénink, režim letadlo.
+- Oliver: na iPhonu znovu čas u vesla, štítek v režimu letadlo, série v tabulce po vypnutí režimu letadlo.
 - Neověřeno: skutečný skript s klíčem z appky (klíč Claude Code nemá), pípnutí a Wake Lock na iPhonu.
 
 ## Další krok: etapa 3
