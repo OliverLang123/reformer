@@ -92,8 +92,9 @@ Hotovo (3. 11.):
 
 Zbývá:
 - Oliver: v appce Obnovit data, zkontrolovat Historii a MINULE u rutiny A.
-- Oliver: znovu `selfTest` (ověří zápis za poslední řádek s 2 738 sériemi v listu).
-- Rozhodnout podíl tělesné váhy u nových cviků s vlastní vahou (Chin Up, Chest Dip, Side Bend, Netopýr, Back Extension).
+- Otevřené: cviky „(Weighted)“ z Hevy (Chest Dip, Triceps Dip, Back Extension) mají Zápis váha × opakování, takže se jim do objemu nepočítá tělesná váha.
+
+Ověřeno po importu (3. 11.): selfTest se všemi OK nad 2 738 sériemi, list Série končí řádkem 2739 bez mezer. Podíl tělesné váhy podle Olivera: Chin Up 1, Chest Dip 1, Side Bend 0,2, Netopýr 0,6, Back Extension (Hyperextension) 0,3.
 
 ## Další krok: etapa 4
 
