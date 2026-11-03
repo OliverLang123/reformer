@@ -175,26 +175,39 @@ function selfTest() {
       { id: id + '-4', exercise: 'Rowing Machine', order: 4, type: 'normální', km: 2, time: '9:12', confirmedAt: now.toISOString() },
     ],
   });
-  saveWorkout_({ workout: { id: id, date: Utilities.formatDate(now, TZ, 'yyyy-MM-dd'), start: now.toISOString(), routine: 'Test' }, sets: [] }); // opakované uložení bez sérií je smaže
+  SpreadsheetApp.flush();
+  const first = readSheet_('Série').filter((s) => s.workout === id);
+  // Stejné série znovu, dřep s jinou váhou: řádky se mají přepsat, ne přidat.
   const res2 = saveWorkout_({
     workout: { id: id, date: Utilities.formatDate(now, TZ, 'yyyy-MM-dd'), start: now.toISOString(), routine: 'Test' },
     sets: [
-      { id: id + '-1', exercise: 'Squat (Barbell)', order: 1, type: 'normální', kg: 100, reps: 10 },
-      { id: id + '-1', exercise: 'Squat (Barbell)', order: 1, type: 'normální', kg: 100, reps: 10 },
+      { id: id + '-1', exercise: 'Squat (Barbell)', order: 1, type: 'normální', kg: 105, reps: 10 },
       { id: id + '-2', exercise: 'Bulgarian Split Squat (Dumbbell)', order: 2, type: 'normální', kg: 40, reps: 10 },
       { id: id + '-3', exercise: 'Pull Up', order: 3, type: 'normální', reps: 10 },
       { id: id + '-4', exercise: 'Rowing Machine', order: 4, type: 'normální', km: 2, time: '9:12' },
     ],
   });
+  // Bez vesla a se zdvojenou sérií: veslo se má smazat, duplicita se nesmí zapsat.
+  const res3 = saveWorkout_({
+    workout: { id: id, date: Utilities.formatDate(now, TZ, 'yyyy-MM-dd'), start: now.toISOString(), routine: 'Test' },
+    sets: [
+      { id: id + '-1', exercise: 'Squat (Barbell)', order: 1, type: 'normální', kg: 105, reps: 10 },
+      { id: id + '-1', exercise: 'Squat (Barbell)', order: 1, type: 'normální', kg: 105, reps: 10 },
+      { id: id + '-2', exercise: 'Bulgarian Split Squat (Dumbbell)', order: 2, type: 'normální', kg: 40, reps: 10 },
+      { id: id + '-3', exercise: 'Pull Up', order: 3, type: 'normální', reps: 10 },
+    ],
+  });
   SpreadsheetApp.flush();
   const data = readSheet_('Série').filter((s) => s.workout === id);
-  const ok = data.length === 4;
+  const vol = (rows) => rows.map((s) => s.exercise + ' ' + (s.volume === undefined ? 'prázdné' : s.volume) + (s.time ? ' čas ' + s.time : '')).join(', ');
+  const check = (cond) => (cond ? 'OK' : 'CHYBA');
   const out = [
-    'první uložení: ' + JSON.stringify(res),
-    'druhé uložení: ' + JSON.stringify(res2),
-    'řádků v Sérii: ' + data.length + (ok ? ' (správně 4, duplicita se nezapsala)' : ' (CHYBA, mají být 4)'),
-    'objemy: ' + data.map((s) => s.exercise + ' ' + s.volume + (s.time ? ' čas ' + s.time : '')).join(', '),
-    'čekám: dřep 1000, bulharský 800, shyby tělesná váha × 10, veslo 0 a čas 9:12',
+    check(res.added === 4) + ' první uložení: ' + JSON.stringify(res),
+    check(res2.updated === 4 && res2.added === 0 && res2.removed === 0) + ' přepsání: ' + JSON.stringify(res2),
+    check(res3.updated === 3 && res3.added === 0 && res3.removed === 1) + ' bez vesla a s duplicitou: ' + JSON.stringify(res3),
+    check(data.length === 3) + ' řádků v Sérii: ' + data.length + ' (mají být 3)',
+    'objemy po prvním uložení: ' + vol(first) + ' (čekám 1000, 800, tělesná váha × 10, prázdné a čas 9:12)',
+    'objemy na konci: ' + vol(data) + ' (čekám 1050, 800, tělesná váha × 10)',
   ];
   deleteWorkout_({ id: id });
   out.push('zkušební trénink smazán, v Sérii zbylo řádků: ' + readSheet_('Série').filter((s) => s.workout === id).length);
