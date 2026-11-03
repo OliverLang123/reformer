@@ -14,7 +14,27 @@ V repozitáři není žádný klíč, adresa skriptu ani osobní data. Adresu sk
 | `sw.js` | service worker (offline) |
 | `manifest.webmanifest`, `icons/` | instalace na plochu |
 | `design/workout-summary-ember/` | předloha obrázku do Stravy (šablona, fonty OFL, náhledy s ukázkovými čísly) |
+| `apps-script/` | Google Apps Script u tabulky: založení listů (`setup`), výchozí cviky, API pro appku, `selfTest` |
 | `tools/` | pomocné skripty pro vývoj |
+
+## Apps Script
+
+Skript je připojený k tabulce a nahrává se přes [clasp](https://github.com/google/clasp) (`.clasp.json` s ID skriptu není v repozitáři).
+
+- `npm run push` nahraje kód, `npx clasp update-deployment <ID nasazení>` nasadí novou verzi webové appky na stejnou adresu.
+- `setup` (spouští se v editoru) založí listy, formáty, vzorec Objem a výchozí cviky. Jde pustit opakovaně, nic nepřepíše.
+- Klíč je ve Vlastnostech skriptu pod názvem `API_KEY`.
+
+API: `POST` na adresu webové appky, tělo JSON jako `text/plain` (bez předběžného dotazu CORS): `{ "key": "...", "action": "...", ... }`. Odpověď `{ "ok": true, ... }` nebo `{ "ok": false, "error": "..." }`.
+
+| Akce | Parametry | Vrací |
+| --- | --- | --- |
+| `ping` | | verze API a název tabulky |
+| `bootstrap` | | `exercises`, `routines`, `body`, `workouts`, `sets` (klíče podle `apps-script/Schema.js`) |
+| `saveWorkout` | `workout`, `sets` | uloží trénink a jeho série podle ID; série tréninku, které v požadavku chybí, smaže; opakování nic nezdvojí |
+| `deleteWorkout` | `id` | smaže trénink a jeho série |
+
+Data a časy jdou v ISO 8601, pole `date` jako `RRRR-MM-DD`, `time` a `rest` jako text `m:ss`.
 
 ## Tabulka
 
@@ -86,7 +106,7 @@ Datum, Váha, Zdroj (`InBody`, `váha`, `chat`). Zapisuje Claude v chatu.
 - **Poslední trénink:** série posledního tréninku, nahoře poznámka k tréninku.
 - **Tento týden:** souhrn po cvicích za posledních 7 dní, nahoře součet.
 
-Podrobnosti listů se upřesní v etapě 1 (viz PROGRESS.md).
+Vzorce v tabulce jsou v české syntaxi (oddělovač středník).
 
 ## Licence třetích stran
 

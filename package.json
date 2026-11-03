@@ -1,0 +1,12 @@
+{
+  "name": "reformer",
+  "private": true,
+  "description": "Nástroje pro vývoj appky Reformer (appka sama se nesestavuje)",
+  "scripts": {
+    "push": "clasp push --force",
+    "status": "clasp show-file-status"
+  },
+  "devDependencies": {
+    "@google/clasp": "^3.4.1"
+  }
+}
