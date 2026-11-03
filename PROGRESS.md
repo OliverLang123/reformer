@@ -10,7 +10,7 @@ Termín: v pondělí 9. 11. 2026 odcvičit Silový trénink A v appce. Nutné js
 | --- | --- | --- |
 | 0 | git, .gitignore, README, kostra PWA (ikona, manifest, service worker), GitHub repozitář a Pages | hotovo |
 | 1 | Apps Script přes clasp, 9 listů, sloupce ID a vzorec Objem, 34 cviků, rutina A (P2), list Tělo z inbody | hotovo |
-| 2 | zápis tréninku jako v Hevy, offline, fronta k odeslání | čeká |
+| 2 | zápis tréninku jako v Hevy, offline, fronta k odeslání | hotovo, čeká test na iPhonu |
 | 3 | import historie z Hevy skriptem (zkušební běh, pak odeslání) | čeká |
 | 4 | přehledy ze vzorců: Maxima, Objem po týdnech, Poslední trénink, Tento týden | čeká |
 | 5 | souhrn do Stravy: název, popis, obrázek Ember se svalovou mapou | čeká |
@@ -55,6 +55,27 @@ Hotovo (3. 11.):
 Zbývá:
 - nic. selfTest prošel (3. 11.): přidání, přepsání existujících sérií, smazání chybějící série, odstranění duplicity v požadavku, objemy a úklid.
 
-## Další krok: etapa 2
+## Etapa 2
 
-Zápis tréninku v appce. Při prvním spuštění appka chce adresu skriptu a klíč (uloží v telefonu). Data z `bootstrap` drží v IndexedDB, rozpracovaný trénink a frontu k odeslání také. Po každé potvrzené sérii odešle `saveWorkout` s celým tréninkem.
+Hotovo (3. 11.), verze appky 0.2.0:
+- Preact + htm přibalené ve `vendor/` (htm 3.1.1), appka bez sestavování.
+- Nastavení: adresa skriptu a klíč (localStorage), ověření přes `ping`, stažení dat přes `bootstrap` (IndexedDB), obnovení dat, stav fronty.
+- Úvod: rutina na řadě nahoře (A → B → C → A podle posledního tréninku; pozná písmeno z „Silový trénink X“), ostatní rutiny, Prázdný trénink, rozpracovaný trénink, posledních 5 tréninků.
+- Trénink: horní lišta (délka, objem, série, Dokončit), název tréninku, poznámka k rutině, karty cviků (anglicky a česky, detail cviku s provedením, maximem a historií, připnutá poznámka trenéra a z rutiny, poznámka ke cviku, odpočinek pro cvik, menu ⋮: nahradit, posunout, superset s dalším, odebrat), tabulka SÉRIE / MINULE / KG / OPAK. / ✓ / ✕ podle způsobu zápisu (+KG u vlastní váhy, ČAS, KM a ČAS), typ série a opakování v záloze v menu série, přidání cviku s hledáním bez diakritiky.
+- ✓ bez přepsání převezme šedý cíl z rutiny (u rozsahu horní číslo), jinak MINULE. Čas jde psát jen číslicemi (912 = 9:12).
+- MINULE: poslední trénink s cvikem; když v něm nejsou označené rozcvičky (historie z Hevy), páruje se podle pořadí všech sérií, jinak zvlášť rozcvičky a pracovní série.
+- Nové maximum (🏆) při ✓: lepší než historie i dřívější série tréninku, první záznam cviku se nepočítá, u cviků na čas se nepočítá.
+- Odpočinek: lišta dole (-15 s, +15 s, Přeskočit), v supersetu až po posledním cviku kola, pípnutí a zvýraznění na konci, počítá se z času konce (přežije zavření). Výchozí 2:00.
+- Uložení: po každé změně potvrzených sérií se do fronty dá celý trénink (`saveWorkout`), fronta drží poslední stav, odešle se při signálu, při návratu do appky a každých 30 s. Štítek Uloženo / Čeká na odeslání. Zahození tréninku pošle `deleteWorkout`.
+- Displej nezhasne (Wake Lock), po 3 hodinách dotaz, jestli trénink skončil, rozpracovaný trénink se po zavření obnoví, tmavý i světlý režim.
+- Dokončit: délka, objem, série, nová maxima, upozornění na nepotvrzené série, poznámka k tréninku. Konec tréninku = ťuknutí na Uložit trénink.
+- Ověřeno v prohlížeči (mobilní velikost) proti náhradnímu API s vymyšlenými daty: MINULE, objemy (na stranu × 2, vlastní váha, veslo 0), nové maximum, superset bez odpočinku, fronta bez signálu a dopsání po návratu, zahození smaže i v tabulce, obnova po znovunačtení, čas 912 = 9:12.
+- Opravená chyba: změny tréninku se dřív počítaly z kopie stavu z dřívějšího vykreslení a úklid doběhlého odpočinku tak přepsal novější údaje (ztratil se čas vesla). Teď `onUpdate` dostává funkci nad aktuálním tréninkem (`activeRef`).
+
+Zbývá:
+- Oliver: na iPhonu zadat adresu skriptu a klíč, zkušební trénink, režim letadlo.
+- Neověřeno: skutečný skript s klíčem z appky (klíč Claude Code nemá), pípnutí a Wake Lock na iPhonu.
+
+## Další krok: etapa 3
+
+Import historie z Hevy: skript v `tools/` načte CSV z `../data/`, sestaví tréninky (ID `hevy-<čas začátku>`) a série (čas začátku jako pražský, `duration_seconds` jako m:ss, `set_type` zatím vždy normální, supersety z `superset_id`), doplní chybějící cviky do listu Cviky (Zápis odvodí z dat), nejdřív zkušební běh se souhrnem, pak odeslání novou akcí skriptu po dávkách. Klíč se zadá do skrytého dotazu v terminálu.

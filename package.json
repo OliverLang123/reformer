@@ -7,6 +7,7 @@
     "status": "clasp show-file-status"
   },
   "devDependencies": {
-    "@google/clasp": "^3.4.1"
+    "@google/clasp": "^3.4.1",
+    "htm": "^3.1.1"
   }
 }

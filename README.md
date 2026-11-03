@@ -10,7 +10,12 @@ V repozitáři není žádný klíč, adresa skriptu ani osobní data. Adresu sk
 
 | Cesta | Co to je |
 | --- | --- |
-| `index.html`, `app.js`, `styles.css` | appka |
+| `index.html`, `app.js`, `styles.css` | appka (obrazovky v Preact + htm, bez sestavování) |
+| `js/util.js` | čísla s desetinnou čárkou, časy m:ss, ID |
+| `js/store.js` | ukládání v telefonu (localStorage, IndexedDB), volání skriptu, fronta k odeslání |
+| `js/model.js` | rutiny, MINULE, maxima, objem, tělesná váha (stejná pravidla jako vzorec Objem) |
+| `js/workout.js` | rozpracovaný trénink: série, supersety, odpočinek, nové maximum, podklad pro tabulku |
+| `vendor/` | přibalené knihovny (viz `vendor/README.md`) |
 | `sw.js` | service worker (offline) |
 | `manifest.webmanifest`, `icons/` | instalace na plochu |
 | `design/workout-summary-ember/` | předloha obrázku do Stravy (šablona, fonty OFL, náhledy s ukázkovými čísly) |

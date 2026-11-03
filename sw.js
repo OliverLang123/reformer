@@ -1,11 +1,16 @@
 // Při každé změně souborů appky zvyš verzi, ať si telefon stáhne novou kopii.
-const CACHE = 'reformer-v0.1.0';
+const CACHE = 'reformer-v0.2.0';
 
 const SHELL = [
   './',
   'index.html',
   'styles.css',
   'app.js',
+  'js/util.js',
+  'js/store.js',
+  'js/model.js',
+  'js/workout.js',
+  'vendor/htm-preact.module.js',
   'manifest.webmanifest',
   'icons/icon-192.png',
   'icons/icon-512.png',
