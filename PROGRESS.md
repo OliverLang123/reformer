@@ -8,7 +8,7 @@ Termín: v pondělí 9. 11. 2026 odcvičit Silový trénink A v appce. Nutné js
 
 | Etapa | Obsah | Stav |
 | --- | --- | --- |
-| 0 | git, .gitignore, README, kostra PWA (ikona, manifest, service worker), GitHub repozitář a Pages | rozpracováno |
+| 0 | git, .gitignore, README, kostra PWA (ikona, manifest, service worker), GitHub repozitář a Pages | hotovo, čeká test na iPhonu |
 | 1 | Apps Script přes clasp, 9 listů, sloupce ID a vzorec Objem, 34 cviků, rutina A (P2), list Tělo z inbody | čeká |
 | 2 | zápis tréninku jako v Hevy, offline, fronta k odeslání | čeká |
 | 3 | import historie z Hevy skriptem (zkušební běh, pak odeslání) | čeká |
@@ -32,7 +32,13 @@ Hotovo (3. 11.):
 - Kostra PWA: `index.html`, `styles.css`, `app.js`, `manifest.webmanifest`, `sw.js`, ikony v `icons/`.
 - Ověřeno v prohlížeči: service worker uloží soubory appky a stránka se otevře i se zastaveným serverem.
 
+- Oliver nainstaloval Node.js (v26.13.0, npm 11.20.0, v `/usr/local/bin`) a GitHub CLI 2.103.3, přihlášen jako OliverLang123 (scopes gist, read:org, repo, workflow). Instalátor gh nebyl podepsaný, otisk SHA-256 ověřen proti oficiálním checksums.
+- Veřejný repozitář https://github.com/OliverLang123/reformer, GitHub Pages z `main`, kořen. Push přes `git push` (gh je přihlášený i pro git).
+- Ověřeno: https://oliverlang123.github.io/reformer/ vrací 200, service worker se aktivuje, SPEC.md a CLAUDE.md na webu nejsou (404).
+
 Zbývá:
-- Oliver: nainstalovat Node.js a GitHub CLI, přihlásit `gh auth login`.
-- Claude Code: `gh repo create reformer --public`, push, zapnout Pages (větev `main`, kořen), ověřit adresu.
-- Oliver: na iPhonu otevřít https://oliverlang123.github.io/reformer/ v Safari, Sdílet → Přidat na plochu, otevřít ikonou a zkusit v režimu letadlo.
+- Oliver: na iPhonu otevřít adresu v Safari, Sdílet → Přidat na plochu, otevřít ikonou a zkusit v režimu letadlo.
+
+## Další krok: etapa 1
+
+Postup: Oliver se přihlásí `npx @google/clasp login` a zapne Apps Script API (https://script.google.com/home/usersettings). Claude Code vytvoří skript připojený k tabulce (`clasp create --type sheets --parentId <ID tabulky>`) a nahraje kód. Klíč zadá Oliver do Script Properties sám.
