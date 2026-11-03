@@ -8,7 +8,7 @@ Termín: v pondělí 9. 11. 2026 odcvičit Silový trénink A v appce. Nutné js
 
 | Etapa | Obsah | Stav |
 | --- | --- | --- |
-| 0 | git, .gitignore, README, kostra PWA (ikona, manifest, service worker), GitHub repozitář a Pages | hotovo, čeká test na iPhonu |
+| 0 | git, .gitignore, README, kostra PWA (ikona, manifest, service worker), GitHub repozitář a Pages | hotovo |
 | 1 | Apps Script přes clasp, 9 listů, sloupce ID a vzorec Objem, 34 cviků, rutina A (P2), list Tělo z inbody | čeká |
 | 2 | zápis tréninku jako v Hevy, offline, fronta k odeslání | čeká |
 | 3 | import historie z Hevy skriptem (zkušební běh, pak odeslání) | čeká |
@@ -37,7 +37,7 @@ Hotovo (3. 11.):
 - Ověřeno: https://oliverlang123.github.io/reformer/ vrací 200, service worker se aktivuje, SPEC.md a CLAUDE.md na webu nejsou (404).
 
 Zbývá:
-- Oliver: na iPhonu otevřít adresu v Safari, Sdílet → Přidat na plochu, otevřít ikonou a zkusit v režimu letadlo.
+- nic, test na iPhonu prošel (3. 11.): ikona na ploše, celá obrazovka, otevření v režimu letadlo.
 
 ## Další krok: etapa 1
 
