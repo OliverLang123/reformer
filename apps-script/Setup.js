@@ -108,7 +108,9 @@ function volumeFormula_(ss) {
   // a nové série by se přidávaly až za ně. Jména parametrů LAMBDA nesmí být R ani C.
   const se = (h) => {
     const letter = columnLetter_(headerIndex_(ss.getSheetByName('Série'))[h] + 1);
-    return "'Série'!" + letter + '2:INDEX(\'Série\'!' + letter + ':' + letter + ', last)';
+    // INDEX(...; 2):INDEX(...; last) místo B2:..., aby vzorec přežil smazání řádku 2
+    const whole = "'Série'!" + letter + ':' + letter;
+    return 'INDEX(' + whole + ', 2):INDEX(' + whole + ', last)';
   };
   const idCol = columnLetter_(headerIndex_(ss.getSheetByName('Série'))['ID'] + 1);
   return '={"Objem"; LET(last, MAX(2, IFNA(XMATCH("?*", \'Série\'!' + idCol + ':' + idCol + ', 2, -1), 2)), MAP(' +
@@ -147,7 +149,8 @@ function seedExercises_(sh) {
   if (sh.getLastRow() > 1) {
     sh.getRange(2, h['Název'] + 1, sh.getLastRow() - 1, 1).getValues().forEach((r) => { existing[r[0]] = true; });
   }
-  const rows = SEED_EXERCISES.filter((e) => !existing[e.name]).map((e) => toRow_(sh, e));
+  const makeRow = rowMaker_(sh);
+  const rows = SEED_EXERCISES.filter((e) => !existing[e.name]).map((e) => makeRow(e));
   if (rows.length) sh.getRange(sh.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
   return rows.length;
 }

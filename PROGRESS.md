@@ -11,7 +11,7 @@ Termín: v pondělí 9. 11. 2026 odcvičit Silový trénink A v appce. Nutné js
 | 0 | git, .gitignore, README, kostra PWA (ikona, manifest, service worker), GitHub repozitář a Pages | hotovo |
 | 1 | Apps Script přes clasp, 9 listů, sloupce ID a vzorec Objem, 34 cviků, rutina A (P2), list Tělo z inbody | hotovo |
 | 2 | zápis tréninku jako v Hevy, offline, fronta k odeslání | hotovo |
-| 3 | import historie z Hevy skriptem (zkušební běh, pak odeslání) | čeká |
+| 3 | import historie z Hevy skriptem (zkušební běh, pak odeslání) | hotovo, čeká kontrola v appce |
 | 4 | přehledy ze vzorců: Maxima, Objem po týdnech, Poslední trénink, Tento týden | čeká |
 | 5 | souhrn do Stravy: název, popis, obrázek Ember se svalovou mapou | čeká |
 | 6 | karty cviků, historie s úpravami, vlastní videa | čeká |
@@ -82,6 +82,19 @@ Zbývá:
 - nic. Na iPhonu ověřeno (3. 11.): čas u vesla, štítek Čeká na odeslání v režimu letadlo, série v tabulce po návratu signálu.
 - Neověřeno: pípnutí a Wake Lock při skutečném tréninku.
 
-## Další krok: etapa 3
+## Etapa 3
 
-Import historie z Hevy: skript v `tools/` načte CSV z `../data/`, sestaví tréninky (ID `hevy-<čas začátku>`) a série (čas začátku jako pražský, `duration_seconds` jako m:ss, `set_type` zatím vždy normální, supersety z `superset_id`), doplní chybějící cviky do listu Cviky (Zápis odvodí z dat), nejdřív zkušební běh se souhrnem, pak odeslání novou akcí skriptu po dávkách. Klíč se zadá do skrytého dotazu v terminálu.
+Hotovo (3. 11.):
+- Skript: akce `importWorkouts` (hromadné přidání, existující ID tréninku přeskočí i se sériemi, chybějící cviky přidá do Cviky). Převod řádků přes `rowMaker_` (záhlaví se čte jednou, jinak by import trval minuty). Nasazení verze 3 na stejné adrese (`npx clasp update-deployment <ID nasazení>`).
+- `tools/import-hevy.mjs`: vlastní parser CSV, čas z exportu jako pražský (správně i přes letní čas), ID `hevy-RRRRMMDD-HHMM`, ID série `<ID tréninku>-001`, `set_type` → Typ, `duration_seconds` → m:ss, supersety z `superset_id` (číslované 1, 2...), Zápis nových cviků odhadnutý z dat (km → vzdálenost a čas, jen čas → čas, bez váhy → vlastní váha, jinak váha × opakování), podíl tělesné váhy 0. Bez `--send` jen zkušební běh. S `--send` se zeptá na adresu a skrytě na klíč, odesílá po 25 trénincích, nejstarší první.
+- Oliver spustil import: 179 tréninků, 2 738 sérií, 74 nových cviků. Kontrola přes konektor: poslední trénink 2. 11. má 27 sérií, veslo 9:12, objemy sedí.
+- Opravené chyby: (1) v prázdném listu Série vzorec Objem vracel prázdný text v N2 a `getLastRow` ho počítal, import tak začal až od řádku 3; teď se zapisuje za poslední řádek s hodnotou v 1. sloupci (`lastRow_`). Prázdný řádek 2 smazán. (2) Smazání řádku 2 rozbilo vzorec Objem (#REF!), protože rozsahy začínaly buňkou B2; teď `INDEX(sloupec; 2):INDEX(sloupec; last)`.
+
+Zbývá:
+- Oliver: v appce Obnovit data, zkontrolovat Historii a MINULE u rutiny A.
+- Oliver: znovu `selfTest` (ověří zápis za poslední řádek s 2 738 sériemi v listu).
+- Rozhodnout podíl tělesné váhy u nových cviků s vlastní vahou (Chin Up, Chest Dip, Side Bend, Netopýr, Back Extension).
+
+## Další krok: etapa 4
+
+Přehledy ze vzorců (Maxima, Objem po týdnech, Poslední trénink, Tento týden) v české syntaxi, ověřit proti appce.

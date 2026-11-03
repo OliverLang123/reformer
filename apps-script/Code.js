@@ -16,6 +16,7 @@ const ACTIONS = {
   }),
   saveWorkout: (req) => saveWorkout_(req),
   deleteWorkout: (req) => deleteWorkout_(req),
+  importWorkouts: (req) => importWorkouts_(req),
 };
 
 function doGet() {
@@ -104,11 +105,18 @@ function toCell_(key, v) {
 
 // Řádek pro zápis: všechny sloupce před Objemem (ten je vzorec a musí být poslední).
 function toRow_(sh, obj) {
+  return rowMaker_(sh)(obj);
+}
+
+// Záhlaví se přečte jednou, vrácená funkce pak převádí objekty na řádky.
+function rowMaker_(sh) {
   const fields = fieldMap_(sh).filter((f) => f.key !== 'volume');
   const width = writeWidth_(sh);
-  const row = new Array(width).fill('');
-  fields.forEach((f) => { if (f.col < width) row[f.col] = toCell_(f.key, obj[f.key]); });
-  return row;
+  return (obj) => {
+    const row = new Array(width).fill('');
+    fields.forEach((f) => { if (f.col < width) row[f.col] = toCell_(f.key, obj[f.key]); });
+    return row;
+  };
 }
 
 function writeWidth_(sh) {
@@ -119,8 +127,17 @@ function writeWidth_(sh) {
   return h['Objem'];
 }
 
+// Poslední řádek s hodnotou v prvním sloupci (ID, Název). getLastRow by započítal i prázdné
+// výsledky vzorce Objem, a nové řádky by se pak zapisovaly za mezeru.
+function lastRow_(sh) {
+  const max = sh.getMaxRows();
+  const cell = sh.getRange(max, 1);
+  if (cell.getValue() !== '') return max;
+  return cell.getNextDataCell(SpreadsheetApp.Direction.UP).getRow();
+}
+
 function ensureRows_(sh, needed) {
-  const free = sh.getMaxRows() - sh.getLastRow();
+  const free = sh.getMaxRows() - lastRow_(sh);
   if (free < needed) sh.insertRowsAfter(sh.getMaxRows(), needed - free + 100);
 }
 
@@ -163,8 +180,9 @@ function upsertRows_(sh, objs, shouldRemove) {
   const textCols = ['ČAS'].map((n) => h[n]).filter((i) => i !== undefined && i < width);
   let updated = 0;
   const fresh = [];
+  const makeRow = rowMaker_(sh);
   objs.forEach((o) => {
-    const row = toRow_(sh, o);
+    const row = makeRow(o);
     if (rowOf[o.id]) {
       textCols.forEach((c) => sh.getRange(rowOf[o.id], c + 1).setNumberFormat('@'));
       sh.getRange(rowOf[o.id], 1, 1, width).setValues([row]);
@@ -175,7 +193,7 @@ function upsertRows_(sh, objs, shouldRemove) {
   });
   if (fresh.length) {
     ensureRows_(sh, fresh.length);
-    const start = sh.getLastRow() + 1;
+    const start = lastRow_(sh) + 1;
     textCols.forEach((c) => sh.getRange(start, c + 1, fresh.length, 1).setNumberFormat('@'));
     sh.getRange(start, 1, fresh.length, width).setValues(fresh);
   }
@@ -184,6 +202,61 @@ function upsertRows_(sh, objs, shouldRemove) {
   ids.forEach((id, i) => { if (shouldRemove(id, workouts[i])) remove.push(i + 2); });
   remove.reverse().forEach((r) => sh.deleteRow(r));
   return { updated: updated, added: fresh.length, removed: remove.length };
+}
+
+// Hromadný import historie (tools/import-hevy.mjs). Tréninky, jejichž ID už v tabulce je,
+// přeskočí i s jejich sériemi, takže import jde pustit znovu. Chybějící cviky přidá do listu Cviky.
+// req: { workouts: [{ workout, sets }], exercises: [{ name, mode, bwFactor }] }
+function importWorkouts_(req) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const cv = sheet_('Cviky');
+    const cvH = headerIndex_(cv);
+    const known = {};
+    if (cv.getLastRow() > 1) {
+      cv.getRange(2, cvH['Název'] + 1, cv.getLastRow() - 1, 1).getValues().forEach((r) => { known[r[0]] = true; });
+    }
+    const newEx = (req.exercises || []).filter((e) => e.name && !known[e.name]);
+    const cvRow = rowMaker_(cv);
+    appendRows_(cv, newEx.map((e) => cvRow(e)));
+
+    const tr = sheet_('Tréninky');
+    const trH = headerIndex_(tr);
+    const existing = {};
+    if (tr.getLastRow() > 1) {
+      tr.getRange(2, trH['ID'] + 1, tr.getLastRow() - 1, 1).getValues().forEach((r) => { existing[String(r[0])] = true; });
+    }
+    const fresh = (req.workouts || []).filter((x) => x.workout && x.workout.id && !existing[x.workout.id]);
+    const trRow = rowMaker_(tr);
+    appendRows_(tr, fresh.map((x) => trRow(x.workout)));
+
+    const se = sheet_('Série');
+    const seRow = rowMaker_(se);
+    const setRows = [];
+    fresh.forEach((x) => (x.sets || []).forEach((s) => setRows.push(seRow(Object.assign({}, s, { workout: x.workout.id })))));
+    appendRows_(se, setRows, ['ČAS']);
+
+    return {
+      workoutsAdded: fresh.length,
+      workoutsSkipped: (req.workouts || []).length - fresh.length,
+      setsAdded: setRows.length,
+      exercisesAdded: newEx.length,
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function appendRows_(sh, rows, textHeaders) {
+  if (!rows.length) return;
+  ensureRows_(sh, rows.length);
+  const start = lastRow_(sh) + 1;
+  const h = headerIndex_(sh);
+  (textHeaders || []).forEach((name) => {
+    if (h[name] !== undefined) sh.getRange(start, h[name] + 1, rows.length, 1).setNumberFormat('@');
+  });
+  sh.getRange(start, 1, rows.length, rows[0].length).setValues(rows);
 }
 
 function deleteWorkout_(req) {
