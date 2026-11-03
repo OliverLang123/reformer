@@ -149,9 +149,10 @@ const SEED_EXERCISES = [
     howto: ['Rukojeti ve výšce hrudníku, lokty lehce pokrčené', 'Lopatky stažené a opřené', 'Spoj ruce před hrudníkem obloukem, ne tlakem', 'Zpátky pomalu do protažení hrudníku'],
   },
   {
-    name: 'Tahání kladky - Po Ruce', cz: 'tahání kladky po ruce', mode: 'váha × opakování',
-    primary: 'upper-back', secondary: 'biceps, forearm', bwFactor: 0,
-    howto: ['Vlastní cvik, popis doplní trenér'],
+    // vlastní cvik z Hevy: Seated Cable Row po jedné ruce
+    name: 'Tahání kladky - Po Ruce', cz: 'jednoruční přítah na kladce vsedě', mode: 'na stranu',
+    primary: 'upper-back', secondary: 'biceps, deltoids, trapezius, forearm', bwFactor: 0,
+    howto: ['Vsedě u spodní kladky, chodidla opřená, kolena lehce pokrčená', 'Jednoruční rukojeť, trup vzpřímený a v klidu, bez záklonu', 'Přitáhni loket podél těla dozadu a stáhni lopatku', 'Trup se nenatáčí za rukou', 'Zpět pomalu do natažené paže, odcvič jednu ruku, pak druhou'],
   },
   {
     name: 'Triceps Dip', cz: 'dipy', mode: 'vlastní váha',
