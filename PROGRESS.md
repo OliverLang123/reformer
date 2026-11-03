@@ -9,7 +9,7 @@ Termín: v pondělí 9. 11. 2026 odcvičit Silový trénink A v appce. Nutné js
 | Etapa | Obsah | Stav |
 | --- | --- | --- |
 | 0 | git, .gitignore, README, kostra PWA (ikona, manifest, service worker), GitHub repozitář a Pages | hotovo |
-| 1 | Apps Script přes clasp, 9 listů, sloupce ID a vzorec Objem, 34 cviků, rutina A (P2), list Tělo z inbody | hotovo, čeká selfTest |
+| 1 | Apps Script přes clasp, 9 listů, sloupce ID a vzorec Objem, 34 cviků, rutina A (P2), list Tělo z inbody | hotovo |
 | 2 | zápis tréninku jako v Hevy, offline, fronta k odeslání | čeká |
 | 3 | import historie z Hevy skriptem (zkušební běh, pak odeslání) | čeká |
 | 4 | přehledy ze vzorců: Maxima, Objem po týdnech, Poslední trénink, Tento týden | čeká |
@@ -53,7 +53,7 @@ Hotovo (3. 11.):
 - Webová appka nasazená (verze 1, přístup kdokoli, běží pod Oliverem). Ověřeno: GET vrací stav, POST bez klíče a se špatným klíčem vrací „Špatný klíč“, CORS funguje z https://oliverlang123.github.io.
 
 Zbývá:
-- Oliver: v editoru spustit `selfTest` (ověří saveWorkout, duplicity, mazání a objem) a poslat protokol.
+- nic. selfTest prošel (3. 11.): přidání, přepsání existujících sérií, smazání chybějící série, odstranění duplicity v požadavku, objemy a úklid.
 
 ## Další krok: etapa 2
 
