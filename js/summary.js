@@ -91,8 +91,8 @@ export function buildSummary(model, workoutId) {
     }
   });
 
-  // Popis
-  const lines = [w.routine || 'Trénink'];
+  // Popis (bez názvu, ten se kopíruje zvlášť)
+  const lines = [];
   for (let i = 0; i < exercises.length; i++) {
     const group = [exercises[i]];
     while (exercises[i].superset && exercises[i + 1] && exercises[i + 1].superset === exercises[i].superset) group.push(exercises[++i]);

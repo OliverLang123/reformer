@@ -12,7 +12,7 @@ import * as W from './js/workout.js';
 import { buildSummary } from './js/summary.js';
 import { renderImage, shareImage, copyText } from './js/strava.js';
 
-export const VERSION = '0.3.0';
+export const VERSION = '0.3.1';
 
 // ---------- zvuk, displej, čas ----------
 

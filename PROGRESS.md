@@ -114,7 +114,7 @@ Zbývá:
 ## Etapa 5
 
 Hotovo (4. 11.), verze appky 0.3.0:
-- `js/summary.js`: z uloženého tréninku v modelu sestaví název (rutina), popis podle SPEC (všechny série, supersety na jednom řádku s „ · “, cviky bez váhy „3×15“, nová maxima, celkem zvednuto · pracovní série · délka) a data pro šablonu (label a title z rutiny, 4 cviky s největším objemem bez cviků na čas, top/previous/isPR, personalRecord mimo vybrané 4, objem jako ve vzorci, svalová mapa podle bodů 1 / 0,5).
+- `js/summary.js`: z uloženého tréninku v modelu sestaví název (rutina), popis podle SPEC, ale bez názvu na prvním řádku (Oliver 4. 11., verze 0.3.1) (všechny série, supersety na jednom řádku s „ · “, cviky bez váhy „3×15“, nová maxima, celkem zvednuto · pracovní série · délka) a data pro šablonu (label a title z rutiny, 4 cviky s největším objemem bez cviků na čas, top/previous/isPR, personalRecord mimo vybrané 4, objem jako ve vzorci, svalová mapa podle bodů 1 / 0,5).
 - `js/strava.js`: šablona v rámu mimo obrazovku, html-to-image 1.11.13 (`vendor/`) udělá PNG, první snímek se zahodí (Safari). Uložit obrázek = Web Share API se souborem, jinak stažení. Kopírování přes schránku.
 - `js/body-map.js`: SVG cesty postavy z react-native-body-highlighter 3.2.0 (`tools/extract-body.mjs`), licence ve `vendor/`.
 - Šablona: `data.body` (postava z dat, viewBox se zúží na obrys) a `bodyweight` (vlastní váha). Bez `data.body` se kreslí původní ukázka.
