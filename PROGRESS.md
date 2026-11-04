@@ -137,8 +137,8 @@ Hotovo (4. 11.):
 - Oliver spustil `authorizeDrive` a povolil Drive (složka „Reformer média“ založená). Nasazení verze 4 na stejné adrese, GET vrací API verze 2, POST se špatným klíčem vrací „Špatný klíč“.
 
 Zbývá:
-- Oliver na iPhonu: natočit krátké video u jednoho cviku (video z iPhonu je .mov, tady testované jen webm), zkontrolovat fotku z prvního snímku, přehrávání, a po Obnovit data v režimu letadlo. Projít historii, úpravu a smazání (na zkušebním tréninku).
-- 0.5.1 (po prvním testu na iPhonu): video RDL se nahrálo, ale fotka z prvního snímku ne (Safari na iPhonu nedekóduje snímek z videa mimo stránku). Teď se video vloží do stránky, krátce spustí (s časovým limitem) a pak se z něj udělá fotka. Když cvik má video a nemá fotku, karta cviku ji při otevření doplní sama. Do té doby karta v tréninku ukazuje snímek z videa. Ověřeno v Chromu, na iPhonu čeká.
+- Oliver na iPhonu: nahrání videa (.mov) a přehrávání ověřeno u RDL. Zbývá nové video rovnou s fotkou a offline (režim letadlo). Projít historii, úpravu a smazání (na zkušebním tréninku).
+- 0.5.1 (po prvním testu na iPhonu): video RDL se nahrálo, ale fotka z prvního snímku ne (Safari na iPhonu nedekóduje snímek z videa mimo stránku). Teď se video vloží do stránky, krátce spustí (s časovým limitem) a pak se z něj udělá fotka. Když cvik má video a nemá fotku, karta cviku ji při otevření doplní sama. Do té doby karta v tréninku ukazuje snímek z videa. Ověřeno v Chromu i na iPhonu (4. 11.): u RDL se fotka po otevření karty doplnila a je v kartě tréninku.
 - Úprava tréninku z historie se drží jen v paměti: když se appka během úpravy zavře, změny se ztratí.
 
 ## Další krok
