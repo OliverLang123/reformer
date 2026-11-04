@@ -63,29 +63,52 @@ export async function prefetchMedia(exercises) {
   }
 }
 
-// Fotka z prvního snímku videa (JPEG, delší strana nejvýš 1080 px)
-export function posterFromVideo(file) {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const v = document.createElement('video');
-    v.muted = true;
-    v.playsInline = true;
-    v.preload = 'auto';
-    const done = (fn, x) => { URL.revokeObjectURL(url); v.removeAttribute('src'); v.load(); fn(x); };
-    const timer = setTimeout(() => done(reject, new Error('Z videa nejde udělat fotka')), 15000);
-    v.addEventListener('loadeddata', () => { v.currentTime = Math.min(0.1, (v.duration || 1) / 2); }, { once: true });
-    v.addEventListener('seeked', () => {
-      clearTimeout(timer);
-      const scale = Math.min(1, 1080 / Math.max(v.videoWidth, v.videoHeight));
-      const c = document.createElement('canvas');
-      c.width = Math.round(v.videoWidth * scale);
-      c.height = Math.round(v.videoHeight * scale);
-      c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
-      c.toBlob((b) => (b ? done(resolve, b) : done(reject, new Error('Z videa nejde udělat fotka'))), 'image/jpeg', 0.85);
-    }, { once: true });
-    v.addEventListener('error', () => { clearTimeout(timer); done(reject, new Error('Video nejde přehrát')); }, { once: true });
-    v.src = url;
+// Fotka z prvního snímku videa (JPEG, delší strana nejvýš 1080 px).
+// Safari na iPhonu dekóduje snímek jen u videa vloženého do stránky, které se krátce spustí.
+export async function posterFromVideo(blob) {
+  const url = URL.createObjectURL(blob);
+  const v = document.createElement('video');
+  v.muted = true;
+  v.defaultMuted = true;
+  v.playsInline = true;
+  v.setAttribute('playsinline', '');
+  v.setAttribute('muted', '');
+  v.preload = 'auto';
+  v.style.cssText = 'position:fixed;left:-2000px;top:0;width:160px;height:284px;opacity:0;pointer-events:none;';
+  document.body.appendChild(v);
+  const once = (ev, ms = 10000) => new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error('Z videa nejde udělat fotka')), ms);
+    v.addEventListener(ev, () => { clearTimeout(t); resolve(); }, { once: true });
+    v.addEventListener('error', () => { clearTimeout(t); reject(new Error('Video nejde přehrát')); }, { once: true });
   });
+  try {
+    const meta = once('loadeddata');
+    v.src = url;
+    v.load();
+    await meta;
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    try { await Promise.race([v.play(), wait(1500)]); } catch { /* bez přehrání to někde jde taky */ }
+    v.pause();
+    const seeked = once('seeked');
+    v.currentTime = Math.min(0.1, (v.duration || 1) / 2);
+    await seeked;
+    await Promise.race([new Promise((r) => v.requestVideoFrameCallback && v.requestVideoFrameCallback(() => r())), wait(300)]);
+    if (!v.videoWidth || !v.videoHeight) throw new Error('Z videa nejde udělat fotka');
+    const scale = Math.min(1, 1080 / Math.max(v.videoWidth, v.videoHeight));
+    const c = document.createElement('canvas');
+    c.width = Math.round(v.videoWidth * scale);
+    c.height = Math.round(v.videoHeight * scale);
+    c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+    const out = await new Promise((r) => c.toBlob(r, 'image/jpeg', 0.85));
+    if (!out) throw new Error('Z videa nejde udělat fotka');
+    return out;
+  } finally {
+    v.pause();
+    v.removeAttribute('src');
+    v.load();
+    v.remove();
+    URL.revokeObjectURL(url);
+  }
 }
 
 function ext(file, fallback) {
@@ -107,7 +130,8 @@ async function upload(exercise, kind, blob, extension) {
 export async function uploadVideo(exercise, file, onStep = () => {}) {
   if (file.size > MAX_BYTES) throw new Error('Video má víc než 20 MB. Natoč kratší (3 až 8 s) nebo ve Full HD.');
   onStep('Připravuji fotku...');
-  const poster = await posterFromVideo(file).catch(() => null);
+  let poster = null;
+  try { poster = await posterFromVideo(file); } catch { /* doplní se při dalším otevření karty */ }
   onStep('Nahrávám video...');
   const video = await upload(exercise, 'video', file, ext(file, 'mp4'));
   let photo = null;
@@ -116,6 +140,13 @@ export async function uploadVideo(exercise, file, onStep = () => {}) {
     photo = await upload(exercise, 'photo', poster, 'jpg');
   }
   return { video, photo };
+}
+
+// Fotka z videa, které už je v Drive (když se při nahrání fotka nepovedla)
+export async function photoFromSavedVideo(exercise, videoObjectUrl) {
+  const blob = await fetch(videoObjectUrl).then((r) => r.blob());
+  const poster = await posterFromVideo(blob);
+  return { photo: await upload(exercise, 'photo', poster, 'jpg') };
 }
 
 export async function uploadPhoto(exercise, file) {

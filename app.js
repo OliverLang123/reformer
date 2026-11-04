@@ -11,9 +11,9 @@ import {
 import * as W from './js/workout.js';
 import { buildSummary } from './js/summary.js';
 import { renderImage, shareImage, copyText } from './js/strava.js';
-import { fileId, mediaUrl, prefetchMedia, uploadVideo, uploadPhoto } from './js/media.js';
+import { fileId, mediaUrl, prefetchMedia, uploadVideo, uploadPhoto, photoFromSavedVideo } from './js/media.js';
 
-export const VERSION = '0.5.0';
+export const VERSION = '0.5.1';
 
 // ---------- zvuk, displej, čas ----------
 
@@ -241,6 +241,7 @@ function SetRow({ w, ex, set, idx, info, prev, onUpdate, onConfirm, onType }) {
 function ExerciseCard({ w, ex, model, onUpdate, onMenu, onDetail, onRest, onType, toast }) {
   const info = exerciseInfo(model, ex.name);
   const photo = useMedia(info.photo);
+  const clip = useMedia(info.photo ? null : info.video);
   const prevSes = previousSession(model, ex.name, w.id, w.edit ? w.start : null);
   const fields = fieldsFor(info.mode);
   const head = { kg: info.mode === MODE.BODY ? '+KG' : 'KG', reps: 'OPAK.', time: 'ČAS', km: 'KM' };
@@ -263,7 +264,9 @@ function ExerciseCard({ w, ex, model, onUpdate, onMenu, onDetail, onRest, onType
   return html`<section class=${'card exercise' + (ex.superset ? ' superset' : '')} data-ss=${ex.superset || ''}>
     <div class="ex-head">
       <button class="ex-title" onClick=${() => onDetail(ex.name)}>
-        <span class="thumb">${photo ? html`<img src=${photo} alt="" />` : (info.cz || info.name).slice(0, 1).toUpperCase()}</span>
+        <span class="thumb">${photo ? html`<img src=${photo} alt="" />`
+          : clip ? html`<video src=${clip + '#t=0.1'} muted playsinline preload="metadata"></video>`
+          : (info.cz || info.name).slice(0, 1).toUpperCase()}</span>
         <span><strong>${ex.name}</strong>${info.cz && html`<small>${info.cz}</small>`}</span>
       </button>
       <button class="icon" onClick=${() => onMenu(ex.key)} aria-label="Menu cviku">⋮</button>
@@ -367,6 +370,17 @@ function ExerciseMedia({ info, onMedia }) {
       setBusy('');
     }
   }
+  // Video bez fotky (fotka se při nahrání nepovedla): doplnit z videa, jednou za otevření karty
+  const tried = useRef(false);
+  useEffect(() => {
+    if (!video || info.photo || busy || tried.current) return;
+    tried.current = true;
+    setBusy('Dělám fotku z videa...');
+    photoFromSavedVideo(info.name, video)
+      .then((links) => onMedia(info.name, links))
+      .catch((x) => setErr('Fotka z videa: ' + (x.message || x)))
+      .finally(() => setBusy(''));
+  }, [video, info.photo]);
   const has = info.video || info.photo;
   return html`<div class="media">
     ${video ? html`<video class="media-view" src=${video} poster=${photo || undefined} autoplay muted loop playsinline></video>`
