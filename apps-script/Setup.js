@@ -18,10 +18,7 @@ function setup() {
 
   formatSheets_(ss);
   ensureVolumeFormula_(ss.getSheetByName('Série'), log);
-  FORMULA_SHEETS.forEach((name) => {
-    const sh = ss.getSheetByName(name);
-    if (sh.getLastRow() === 0) sh.getRange('A1').setValue('Přehled ze vzorců, doplní se v etapě 4.');
-  });
+  ensureOverviews_(ss, log);
 
   const added = seedExercises_(ss.getSheetByName('Cviky'));
   if (added) log.push('přidáno cviků: ' + added);

@@ -12,7 +12,7 @@ Termín: v pondělí 9. 11. 2026 odcvičit Silový trénink A v appce. Nutné js
 | 1 | Apps Script přes clasp, 9 listů, sloupce ID a vzorec Objem, 34 cviků, rutina A (P2), list Tělo z inbody | hotovo |
 | 2 | zápis tréninku jako v Hevy, offline, fronta k odeslání | hotovo |
 | 3 | import historie z Hevy skriptem (zkušební běh, pak odeslání) | hotovo, čeká kontrola v appce |
-| 4 | přehledy ze vzorců: Maxima, Objem po týdnech, Poslední trénink, Tento týden | čeká |
+| 4 | přehledy ze vzorců: Maxima, Objem po týdnech, Poslední trénink, Tento týden | hotovo |
 | 5 | souhrn do Stravy: název, popis, obrázek Ember se svalovou mapou | čeká |
 | 6 | karty cviků, historie s úpravami, vlastní videa | čeká |
 
@@ -96,6 +96,21 @@ Zbývá:
 
 Ověřeno po importu (3. 11.): selfTest se všemi OK nad 2 738 sériemi, list Série končí řádkem 2739 bez mezer. Podíl tělesné váhy podle Olivera: Chin Up 1, Chest Dip 1, Side Bend 0,2, Netopýr 0,6, Back Extension (Hyperextension) 0,3.
 
-## Další krok: etapa 4
+## Etapa 4
 
-Přehledy ze vzorců (Maxima, Objem po týdnech, Poslední trénink, Tento týden) v české syntaxi, ověřit proti appce.
+Hotovo (4. 11.):
+- `apps-script/Overview.js`: vzorce všech čtyř přehledů, každý list má jediný vzorec v A1 (ARRAYFORMULA + LET, MAP/LAMBDA, VSTACK/HSTACK). Sloupce se hledají podle záhlaví. `setup` vzorec zapíše, když chybí nebo A1 nedává očekávané záhlaví, a nastaví formáty. Zástupný text z etapy 1 je pryč.
+- Převod do české syntaxe `toSemicolons_` mění čárky na středníky jen mimo text v uvozovkách. Vzorce nepoužívají složené závorky ani desetinná čísla.
+- `tools/overview-formulas.mjs` vypíše vzorce v české syntaxi (podle pořadí sloupců ve Schema.js). Tak se zapsaly do tabulky přes konektor, formáty (datum, tisíce, tučné záhlaví) přes batchUpdate.
+- Popis řádků a sloupců přehledů je v README.
+- Ověřeno proti výpočtu appky (`js/model.js` nad exportem z Hevy): Maxima všech 100 cviků (KG, OPAK., datum) sedí; Objem po týdnech: 82 týdnů, tréninky a série sedí, objem v 81 týdnech, v jednom o 1 kg jinak (zaokrouhlení součtu, který vychází na x,5). Poslední trénink (2. 11., 27 sérií, objem jako v Objemu po týdnech) a Tento týden zkontrolované ručně.
+- Poučení: jméno v LET nesmí být adresa buňky (`in7` = buňka IN7 dává #NAME?). V jednom velkém vzorci se pomocná LAMBDA volaná s rozsahem (`at(sloupec)`) a jména jako `rows` chovaly divně (prázdné horní řádky), přímé XLOOKUP fungují.
+- Datum u maxima je datum posledního dosažení, stejně jako v detailu cviku v appce.
+
+Zbývá:
+- Oliver: v appce Obnovit data, zkontrolovat Historii a MINULE u rutiny A (z etapy 3).
+- Otevřené: cviky „(Weighted)“ z Hevy (Chest Dip, Triceps Dip, Back Extension) mají Zápis váha × opakování, takže se jim do objemu nepočítá tělesná váha.
+
+## Další krok: etapa 5
+
+Souhrn do Stravy: název, popis, obrázek Ember se svalovou mapou (SPEC.md, sekce „Po tréninku: souhrn do Stravy“, předloha design/workout-summary-ember/).

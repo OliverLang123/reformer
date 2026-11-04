@@ -63,7 +63,7 @@ const SCHEMA = {
   ],
 };
 
-// Přehledy a pomocné listy jen ze vzorců (etapa 4).
+// Přehledy a pomocné listy jen ze vzorců (apps-script/Overview.js).
 const FORMULA_SHEETS = ['Poslední trénink', 'Tento týden', 'Maxima', 'Objem po týdnech'];
 
 const SET_TYPES = ['normální', 'rozcvička', 'do selhání', 'drop'];

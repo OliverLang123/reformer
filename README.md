@@ -20,7 +20,7 @@ V repozitáři není žádný klíč, adresa skriptu ani osobní data. Adresu sk
 | `manifest.webmanifest`, `icons/` | instalace na plochu |
 | `design/workout-summary-ember/` | předloha obrázku do Stravy (šablona, fonty OFL, náhledy s ukázkovými čísly) |
 | `apps-script/` | Google Apps Script u tabulky: založení listů (`setup`), výchozí cviky, API pro appku, `selfTest` |
-| `tools/` | pomocné skripty pro vývoj |
+| `tools/` | pomocné skripty pro vývoj (`overview-formulas.mjs` vypíše vzorce přehledů v české syntaxi) |
 
 ## Apps Script
 
@@ -106,10 +106,30 @@ Datum, Váha, Zdroj (`InBody`, `váha`, `chat`). Zapisuje Claude v chatu.
 
 ### Přehledy (jen vzorce)
 
-- **Maxima:** pro každý cvik nejtěžší váha, počet opakování a datum.
-- **Objem po týdnech:** celkem zvednuto a počet sérií za týden.
-- **Poslední trénink:** série posledního tréninku, nahoře poznámka k tréninku.
-- **Tento týden:** souhrn po cvicích za posledních 7 dní, nahoře součet.
+Každý list má jediný vzorec v buňce A1 (`apps-script/Overview.js`), který vypíše celou tabulku i se záhlavím. Do těchto listů se nepíše. Když vzorec chybí nebo hlásí chybu, `setup` ho zapíše znovu.
+
+**Poslední trénink** (pro Claude v chatu po tréninku). Poslední trénink podle začátku.
+
+| Řádek | Obsah |
+| --- | --- |
+| 1 až 5 | Datum, Rutina, Začátek a Konec, Objem kg a počet sérií (Sérií, Pracovních = bez rozcviček), Poznámka k tréninku |
+| 7 | záhlaví: Cvik, Pořadí, Superset, Typ, KG, OPAK., ČAS, KM, V záloze, Poznámka ke cviku |
+| 8 a dál | série v pořadí cviků |
+
+**Tento týden** (pro týdenní hodnocení). Posledních 7 dní včetně dneška.
+
+| Řádek | Obsah |
+| --- | --- |
+| 1 | Od, Do |
+| 2 | součet: Tréninků, Sérií, Objem kg |
+| 4 | záhlaví: Cvik, Tréninků, Sérií, Nejtěžší série, Celkem zvednuto |
+| 5 a dál | cviky v pořadí, jak byly odcvičené |
+
+Nejtěžší série je bez rozcviček: `100 kg × 10`, u vlastní váhy `+10 kg × 8` nebo `14 opak.`, u cviků na čas všechny časy (`2 km 9:12`).
+
+**Maxima:** Cvik, Česky, KG, OPAK., Datum, Zápis. Stejné pravidlo jako appka: jen pracovní série, největší KG, při shodě víc opakování, datum posledního dosažení. U vlastní váhy je KG přidaná zátěž. Cviky na čas a vzdálenost nemají maximum.
+
+**Objem po týdnech:** Týden od (pondělí), Tréninků, Sérií, Pracovních sérií, Objem kg. Nejnovější týden nahoře. Objem a Sérií včetně rozcviček, ze sloupce Objem v listu Série.
 
 Vzorce v tabulce jsou v české syntaxi (oddělovač středník).
 
