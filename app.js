@@ -12,7 +12,7 @@ import * as W from './js/workout.js';
 import { buildSummary } from './js/summary.js';
 import { renderImage, shareImage, copyText } from './js/strava.js';
 
-export const VERSION = '0.3.1';
+export const VERSION = '0.4.0';
 
 // ---------- zvuk, displej, čas ----------
 
@@ -51,8 +51,9 @@ function useNow(ms) {
 }
 
 // Displej během tréninku nezhasne (Screen Wake Lock, obnoví se po návratu do appky)
-function useWakeLock() {
+function useWakeLock(on = true) {
   useEffect(() => {
+    if (!on) return undefined;
     let lock = null;
     let alive = true;
     const get = async () => {
@@ -68,7 +69,7 @@ function useWakeLock() {
       document.removeEventListener('visibilitychange', onVis);
       if (lock) lock.release().catch(() => {});
     };
-  }, []);
+  }, [on]);
 }
 
 // ---------- drobné prvky ----------
@@ -154,7 +155,7 @@ function Settings({ data, qs, onSaved, onBack }) {
 
 // ---------- úvodní obrazovka ----------
 
-function Home({ model, active, qs, onStart, onResume, onSettings, onOpen }) {
+function Home({ model, active, qs, onStart, onResume, onSettings, onOpen, onHistory }) {
   const routines = useMemo(() => (model ? orderRoutines(model, routineList(model)) : []), [model]);
   const recent = model ? model.workouts.slice(0, 5) : [];
   return html`<main>
@@ -184,6 +185,7 @@ function Home({ model, active, qs, onStart, onResume, onSettings, onOpen }) {
         ${recent.map((w) => html`<li><button class="history-item" onClick=${() => onOpen(w.id)}>
           <span>${fmtDate(w.date)}</span><span>${w.routine}</span></button></li>`)}
       </ul>
+      <button class="link small" onClick=${onHistory}>Celá historie (${model.workouts.length})</button>
     </section>`}
   </main>`;
 }
@@ -234,7 +236,7 @@ function SetRow({ w, ex, set, idx, info, prev, onUpdate, onConfirm, onType }) {
 
 function ExerciseCard({ w, ex, model, onUpdate, onMenu, onDetail, onRest, onType, toast }) {
   const info = exerciseInfo(model, ex.name);
-  const prevSes = previousSession(model, ex.name, w.id);
+  const prevSes = previousSession(model, ex.name, w.id, w.edit ? w.start : null);
   const fields = fieldsFor(info.mode);
   const head = { kg: info.mode === MODE.BODY ? '+KG' : 'KG', reps: 'OPAK.', time: 'ČAS', km: 'KM' };
   const pinned = [info.coach, ex.routineNote].filter(Boolean).join(' · ');
@@ -347,7 +349,7 @@ function ExerciseDetail({ model, name, onClose }) {
 }
 
 function Workout({ model, w, qs, onUpdate, onFinish, onDiscard, onHome }) {
-  useWakeLock();
+  useWakeLock(!w.edit);
   const now = useNow(1000);
   const st = W.stats(w, model);
   const [picker, setPicker] = useState(null);
@@ -360,7 +362,7 @@ function Workout({ model, w, qs, onUpdate, onFinish, onDiscard, onHome }) {
 
   // Zapomenutý trénink: po 3 hodinách se zeptá jednou
   useEffect(() => {
-    if (w.asked3h || now - new Date(w.start).getTime() < 3 * 3600 * 1000) return;
+    if (w.edit || w.asked3h || now - new Date(w.start).getTime() < 3 * 3600 * 1000) return;
     const done = window.confirm('Trénink běží přes 3 hodiny. Skončil jsi?');
     onUpdate((cur) => W.patch(cur, (n) => { n.asked3h = true; }), false);
     if (done) onFinish();
@@ -371,16 +373,17 @@ function Workout({ model, w, qs, onUpdate, onFinish, onDiscard, onHome }) {
 
   return html`<main class="workout">
     <header class="wbar">
-      <button class="link" onClick=${onHome}>Úvod</button>
+      <button class="link" onClick=${onHome}>${w.edit ? 'Zrušit' : 'Úvod'}</button>
       <div class="wmid">
         <div class="wstats">
-          <span><small>Délka</small>${fmtTime(Math.floor((now - new Date(w.start).getTime()) / 1000))}</span>
+          <span><small>Délka</small>${w.edit ? (w.end ? fmtDuration(new Date(w.end) - new Date(w.start)) : '-')
+            : fmtTime(Math.floor((now - new Date(w.start).getTime()) / 1000))}</span>
           <span><small>Objem</small>${fmtInt(st.volume)} kg</span>
           <span><small>Série</small>${st.sets}</span>
         </div>
-        <${SyncPill} qs=${qs} />
+        ${w.edit ? html`<span class="pill">Úprava ${fmtDate(w.start)}</span>` : html`<${SyncPill} qs=${qs} />`}
       </div>
-      <button class="primary" onClick=${onFinish}>Dokončit</button>
+      <button class="primary" onClick=${onFinish}>${w.edit ? 'Uložit' : 'Dokončit'}</button>
     </header>
     <div class="wtitle">
       <input class="title-input" value=${w.title} onInput=${(e) => onUpdate((cur) => W.patch(cur, (n) => { n.title = e.target.value; }), false)} />
@@ -390,10 +393,13 @@ function Workout({ model, w, qs, onUpdate, onFinish, onDiscard, onHome }) {
       onUpdate=${onUpdate} onMenu=${setMenu} onDetail=${setDetail} onRest=${setRestFor}
       onType=${(exKey, setId) => setTypeFor({ exKey, setId })} toast=${toast} />`)}
     <button class="wide" onClick=${() => setPicker({ mode: 'add' })}>+ Přidat cvik</button>
-    <button class="wide danger" onClick=${onDiscard}>Zahodit trénink</button>
+    ${w.edit ? html`<label class="form">Poznámka k tréninku
+        <textarea rows="3" value=${w.note} onInput=${(e) => onUpdate((cur) => W.patch(cur, (n) => { n.note = e.target.value; }), false)}></textarea>
+      </label>`
+      : html`<button class="wide danger" onClick=${onDiscard}>Zahodit trénink</button>`}
     <div class="spacer"></div>
 
-    <${RestBar} w=${w} onUpdate=${onUpdate} now=${now} />
+    ${!w.edit && html`<${RestBar} w=${w} onUpdate=${onUpdate} now=${now} />`}
     <${Toast} text=${toastText} />
 
     ${picker && html`<${ExercisePicker} model=${model} title=${picker.mode === 'add' ? 'Přidat cvik' : 'Nahradit cvik'}
@@ -524,12 +530,74 @@ function Summary({ s, onDone, toast }) {
   </main>`;
 }
 
-// Souhrn staršího tréninku z historie
-function WorkoutSummary({ model, id, onBack, toast }) {
-  const s = useMemo(() => buildSummary(model, id), [model, id]);
+const MONTHS = ['leden', 'únor', 'březen', 'duben', 'květen', 'červen', 'červenec', 'srpen', 'září', 'říjen', 'listopad', 'prosinec'];
+
+function History({ model, onOpen, onBack }) {
+  const groups = useMemo(() => {
+    const out = [];
+    model.workouts.forEach((w) => {
+      const [y, m] = String(w.date).split('-').map(Number);
+      const label = `${MONTHS[m - 1]} ${y}`;
+      if (!out.length || out[out.length - 1].label !== label) out.push({ label, items: [] });
+      out[out.length - 1].items.push(w);
+    });
+    return out;
+  }, [model]);
+  return html`<main>
+    <header class="top"><button class="link" onClick=${onBack}>Zpět</button><h1 class="small">Historie</h1><span></span></header>
+    ${groups.map((g) => html`<section class="card">
+      <h3>${g.label}</h3>
+      <ul class="history">
+        ${g.items.map((w) => html`<li><button class="history-item" onClick=${() => onOpen(w.id)}>
+          <span>${fmtDate(w.date)}</span><span>${w.routine}</span></button></li>`)}
+      </ul>
+    </section>`)}
+    ${!groups.length && html`<p class="muted center">Zatím žádný trénink.</p>`}
+  </main>`;
+}
+
+// Detail tréninku z historie: série, úprava, smazání a souhrn do Stravy
+function PastWorkout({ model, id, onBack, onEdit, onDelete, toast }) {
+  const w = model.workouts.find((x) => x.id === id);
+  const s = useMemo(() => (w ? buildSummary(model, id) : null), [model, id]);
+  if (!w) {
+    return html`<main><header class="top"><button class="link" onClick=${onBack}>Zpět</button><h1 class="small">Trénink</h1><span></span></header>
+      <p class="muted center">Trénink už v datech není.</p></main>`;
+  }
+  const sets = [...(model.setsBy.get(id) || [])].sort((a, b) => a.order - b.order);
+  const groups = [];
+  sets.forEach((x) => {
+    const last = groups[groups.length - 1];
+    if (last && last.order === x.order && last.name === x.exercise) last.sets.push(x);
+    else groups.push({ name: x.exercise, order: x.order, superset: x.superset, note: x.exerciseNote, sets: [x] });
+  });
+  const time = (iso) => (iso ? new Date(iso).toLocaleTimeString('cs-CZ', { hour: 'numeric', minute: '2-digit' }) : '');
+  const typeTag = { W: 'W', F: 'F', D: 'D' };
   return html`<main>
     <header class="top"><button class="link" onClick=${onBack}>Zpět</button><h1 class="small">Trénink</h1><span></span></header>
-    ${s ? html`<${StravaCard} s=${s} toast=${toast} />` : html`<p class="muted center">Trénink už v datech není.</p>`}
+    <section class="card">
+      <h2>${w.routine}</h2>
+      <p class="muted">${fmtDate(w.date)}${w.start ? ' · ' + time(w.start) : ''}${w.end ? ' - ' + time(w.end) : ''}</p>
+      ${s && html`<div class="sum-grid">
+        <div><small>Délka</small><strong>${w.start && w.end ? fmtDuration(new Date(w.end) - new Date(w.start)) : '-'}</strong></div>
+        <div><small>Objem</small><strong>${fmtInt(s.image.totalVolumeKg)} kg</strong></div>
+        <div><small>Série</small><strong>${sets.length}</strong></div>
+      </div>`}
+      ${w.note && html`<p class="pinned">${w.note}</p>`}
+      ${groups.map((g) => {
+        const info = exerciseInfo(model, g.name);
+        return html`<div class="past-ex">
+          <strong>${g.name}</strong>${g.superset && html` <span class="ss-tag">Superset ${g.superset}</span>`}
+          ${g.note && html`<small class="muted">${g.note}</small>`}
+          <ol>${g.sets.map((x) => html`<li>${typeTag[x.type] && html`<b class="tag">${typeTag[x.type]}</b> `}${fmtSet(x, info.mode)}${x.rir !== null ? ` · ${x.rir} v záloze` : ''}</li>`)}</ol>
+        </div>`;
+      })}
+      <div class="row-btns">
+        <button onClick=${onEdit}>Upravit</button>
+        <button class="danger" onClick=${onDelete}>Smazat</button>
+      </div>
+    </section>
+    ${s && html`<${StravaCard} s=${s} toast=${toast} />`}
   </main>`;
 }
 
@@ -543,10 +611,18 @@ function App() {
   const [view, setView] = useState(getConfig() ? (getActive() ? 'workout' : 'home') : 'settings');
   const [summary, setSummary] = useState(null);
   const [openId, setOpenId] = useState(null);
+  const [backTo, setBackTo] = useState('home');
+  const [editing, setEditingState] = useState(null);
+  const editRef = useRef(null);
+  const setEditing = (w) => { editRef.current = w; setEditingState(w); };
   const [toastText, setToastText] = useState('');
   const toast = (t) => { setToastText(t); setTimeout(() => setToastText(''), 3000); };
 
   useEffect(() => onQueueChange((s) => { setQs(s); setQueueState(getQueue()); }), []);
+  // Po odeslání z fronty se data v telefonu doplní, načíst je znovu
+  useEffect(() => {
+    if (qs.dataVersion) loadCachedData().then((d) => { if (d) setData(d); }).catch(() => {});
+  }, [qs.dataVersion]);
 
   async function refresh() {
     try {
@@ -625,6 +701,42 @@ function App() {
     setView('summary');
   }
 
+  // Úprava tréninku z historie: změny jen v paměti, do tabulky až po Uložit
+  function startEdit(id) {
+    const w = W.fromSaved(model, id);
+    if (!w) return;
+    setEditing(w);
+    setView('edit');
+  }
+  function updateEdit(change) {
+    const w = typeof change === 'function' ? change(editRef.current) : change;
+    if (w) setEditing({ ...w, restEnd: null });
+  }
+  function saveEdit() {
+    const w = editRef.current;
+    if (!w.exercises.some((e) => e.sets.some((s) => s.done))) {
+      toast('Trénink nemá žádnou potvrzenou sérii. Smaž ho v detailu.');
+      return;
+    }
+    const snap = W.snapshot(w, w.end);
+    enqueueSave(snap.workout, snap.sets);
+    setEditing(null);
+    setView('past');
+    toast('Změny uloženy');
+  }
+  function cancelEdit() {
+    if (!window.confirm('Zahodit změny v tréninku?')) return;
+    setEditing(null);
+    setView('past');
+  }
+  function deletePast(id) {
+    if (!window.confirm('Smazat trénink i se všemi sériemi? V tabulce se smaže taky.')) return;
+    enqueueDelete(id);
+    setView(backTo);
+    toast('Trénink smazán');
+  }
+  const openPast = (id, from) => { setOpenId(id); setBackTo(from); setView('past'); };
+
   let screen;
   if (view === 'settings' || !getConfig()) {
     screen = html`<${Settings} data=${data} qs=${qs}
@@ -639,12 +751,18 @@ function App() {
     screen = html`<${Finish} model=${model} w=${active} onSave=${save} onBack=${() => setView('workout')} onDiscard=${discard} />`;
   } else if (view === 'summary' && summary) {
     screen = html`<${Summary} s=${summary} toast=${toast} onDone=${() => { setSummary(null); setView('home'); refresh(); }} />`;
+  } else if (view === 'edit' && editing) {
+    screen = html`<${Workout} model=${model} w=${editing} qs=${qs} onUpdate=${updateEdit}
+      onFinish=${saveEdit} onDiscard=${cancelEdit} onHome=${cancelEdit} />`;
+  } else if (view === 'history') {
+    screen = html`<${History} model=${model} onOpen=${(id) => openPast(id, 'history')} onBack=${() => setView('home')} />`;
   } else if (view === 'past' && openId) {
-    screen = html`<${WorkoutSummary} model=${model} id=${openId} toast=${toast} onBack=${() => setView('home')} />`;
+    screen = html`<${PastWorkout} model=${model} id=${openId} toast=${toast} onBack=${() => setView(backTo)}
+      onEdit=${() => startEdit(openId)} onDelete=${() => deletePast(openId)} />`;
   } else {
     screen = html`<${Home} model=${model} active=${active} qs=${qs} onStart=${start}
       onResume=${() => setView('workout')} onSettings=${() => setView('settings')}
-      onOpen=${(id) => { setOpenId(id); setView('past'); }} />`;
+      onOpen=${(id) => openPast(id, 'home')} onHistory=${() => setView('history')} />`;
   }
   return html`${screen}<${Toast} text=${toastText} />`;
 }

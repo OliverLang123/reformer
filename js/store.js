@@ -116,6 +116,23 @@ export async function refreshData() {
   return clean;
 }
 
+// Odeslaný trénink (nebo jeho smazání) se zapíše i do dat v telefonu, aby se po odchodu
+// z fronty neukazoval starý stav až do dalšího obnovení dat.
+let dataVersion = 0;
+async function applyToCache(item) {
+  const data = await idbGet('bootstrap').catch(() => null);
+  if (!data) return;
+  const id = item.op === 'delete' ? item.id : item.workout.id;
+  data.workouts = (data.workouts || []).filter((w) => String(w.id) !== id);
+  data.sets = (data.sets || []).filter((s) => String(s.workout) !== id);
+  if (item.op === 'save') {
+    data.workouts.push(item.workout);
+    item.sets.forEach((s) => data.sets.push({ ...s, workout: id }));
+  }
+  await idbSet('bootstrap', data);
+  dataVersion++;
+}
+
 // ---------- fronta k odeslání ----------
 
 const listeners = new Set();
@@ -133,7 +150,7 @@ function setQueue(q) {
 
 export function queueStatus() {
   const n = Object.keys(getQueue()).length;
-  return { pending: n, sending, error: lastError };
+  return { pending: n, sending, error: lastError, dataVersion };
 }
 
 export function onQueueChange(fn) {
@@ -173,6 +190,7 @@ export async function flushQueue() {
       if (!item) continue;
       if (item.op === 'delete') await call('deleteWorkout', { id });
       else await call('saveWorkout', { workout: item.workout, sets: item.sets });
+      await applyToCache(item).catch(() => {});
       // Mezitím mohl přijít novější stav, ten ve frontě zůstane.
       const q = getQueue();
       if (q[id] && q[id].rev === item.rev) {

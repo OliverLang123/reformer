@@ -195,8 +195,10 @@ export function orderRoutines(model, list) {
 const isWarm = (s) => s.type === 'W';
 
 // Poslední trénink s tímto cvikem (mimo aktuální)
-export function previousSession(model, exercise, excludeId) {
-  return (model.history.get(exercise) || []).find((h) => h.workoutId !== excludeId) || null;
+// before: jen tréninky začaté dřív (úprava staršího tréninku z historie)
+export function previousSession(model, exercise, excludeId, before = null) {
+  return (model.history.get(exercise) || []).find((h) => h.workoutId !== excludeId
+    && (!before || String(h.start || h.date) < String(before))) || null;
 }
 
 // MINULE pro sérii: stejná pozice mezi rozcvičkami, resp. mezi pracovními sériemi.

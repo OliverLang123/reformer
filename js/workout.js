@@ -101,7 +101,7 @@ export function confirmSet(w, exKey, setId, model) {
   const ex = findEx(n, exKey);
   const set = ex.sets.find((x) => x.id === setId);
   const info = exerciseInfo(model, ex.name);
-  const prevSes = previousSession(model, ex.name, n.id);
+  const prevSes = previousSession(model, ex.name, n.id, n.edit ? n.start : null);
   const prev = previousFor(prevSes, set, ex.sets);
 
   const values = {};
@@ -234,6 +234,49 @@ export function toggleSuperset(w, exKey) {
   ex.superset = id;
   next.superset = id;
   return n;
+}
+
+// Uložený trénink z historie jako upravitelný trénink (série potvrzené, stejná ID)
+export function fromSaved(model, id) {
+  const saved = model.workouts.find((x) => x.id === id);
+  if (!saved) return null;
+  const sets = [...(model.setsBy.get(id) || [])].sort((a, b) => a.order - b.order);
+  const w = {
+    id,
+    title: saved.routine || 'Trénink',
+    routine: saved.routine || '',
+    routineNote: '',
+    start: saved.start || `${saved.date}T12:00:00`,
+    end: saved.end || null,
+    note: saved.note || '',
+    exercises: [],
+    restEnd: null,
+    restTotal: 0,
+    asked3h: true,
+    edit: true,
+  };
+  const byKey = new Map();
+  sets.forEach((s) => {
+    const key = s.order + '|' + s.exercise;
+    if (!byKey.has(key)) {
+      const ex = newExercise(s.exercise, { superset: s.superset });
+      ex.note = s.exerciseNote || '';
+      byKey.set(key, ex);
+      w.exercises.push(ex);
+    }
+    const num = (v) => (v === null || v === undefined ? '' : String(v).replace('.', ','));
+    byKey.get(key).sets.push({
+      id: s.id,
+      type: s.type,
+      input: { kg: num(s.kg), reps: num(s.reps), time: s.time !== null ? fmtTime(s.time) : '', km: num(s.km) },
+      target: {},
+      done: true,
+      confirmedAt: s.confirmedAt || null,
+      rir: s.rir,
+      pr: false,
+    });
+  });
+  return w;
 }
 
 export function patch(w, fn) {
