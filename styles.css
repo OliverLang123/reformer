@@ -339,3 +339,19 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 0.8; }
   max-width: 90vw;
   text-align: center;
 }
+
+/* Historie: řádek je tlačítko (otevře souhrn tréninku) */
+.history li { padding: 0; }
+.history-item {
+  width: 100%; display: flex; justify-content: space-between; gap: 12px; padding: 8px 0;
+  background: none; color: inherit; font: inherit; text-align: right; min-height: 0; border-radius: 0;
+}
+.history-item span:first-child { color: var(--muted); white-space: nowrap; }
+
+/* Souhrn do Stravy */
+.strava-img { aspect-ratio: 1; border-radius: 12px; overflow: hidden; background: #0b0c0e; display: flex; align-items: center; justify-content: center; margin: 8px 0 12px; }
+.strava-img img { width: 100%; height: 100%; display: block; }
+.strava-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.strava-actions .primary { grid-column: 1 / -1; }
+.strava-name { font-weight: 600; margin: 14px 0 4px; }
+.strava-desc { white-space: pre-wrap; font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; margin: 0; color: var(--muted); overflow-wrap: anywhere; }

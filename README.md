@@ -15,10 +15,13 @@ V repozitáři není žádný klíč, adresa skriptu ani osobní data. Adresu sk
 | `js/store.js` | ukládání v telefonu (localStorage, IndexedDB), volání skriptu, fronta k odeslání |
 | `js/model.js` | rutiny, MINULE, maxima, objem, tělesná váha (stejná pravidla jako vzorec Objem) |
 | `js/workout.js` | rozpracovaný trénink: série, supersety, odpočinek, nové maximum, podklad pro tabulku |
+| `js/summary.js` | souhrn do Stravy: název, popis a data pro obrázek (výběr cviků, vs. minule, maxima, svalová mapa) |
+| `js/strava.js` | obrázek PNG ze šablony (skrytý rám + html-to-image), sdílení, kopírování |
+| `js/body-map.js` | SVG cesty postavy z react-native-body-highlighter (generuje `tools/extract-body.mjs`) |
 | `vendor/` | přibalené knihovny (viz `vendor/README.md`) |
 | `sw.js` | service worker (offline) |
 | `manifest.webmanifest`, `icons/` | instalace na plochu |
-| `design/workout-summary-ember/` | předloha obrázku do Stravy (šablona, fonty OFL, náhledy s ukázkovými čísly) |
+| `design/workout-summary-ember/` | předloha obrázku do Stravy (šablona, fonty OFL, náhledy s ukázkovými čísly); appka kreslí obrázek přímo touto šablonou |
 | `apps-script/` | Google Apps Script u tabulky: založení listů (`setup`), výchozí cviky, API pro appku, `selfTest` |
 | `tools/` | pomocné skripty pro vývoj (`overview-formulas.mjs` vypíše vzorce přehledů v české syntaxi) |
 
@@ -133,6 +136,17 @@ Nejtěžší série je bez rozcviček: `100 kg × 10`, u vlastní váhy `+10 kg 
 
 Vzorce v tabulce jsou v české syntaxi (oddělovač středník).
 
+## Souhrn do Stravy
+
+Appka se Stravou nekomunikuje. Po uložení tréninku (a po ťuknutí na trénink v Historii) ukáže obrázek 1080 × 1080, název a popis s tlačítky Kopírovat název, Kopírovat popis a Uložit obrázek (share sheet, jinak stažení `reformer-RRRR-MM-DD.png`).
+
+Šablona `design/workout-summary-ember/template/summary.html` je proti předloze upravená jen ve dvou věcech:
+- `data.body` = `{ front: { viewBox, parts: [{ d, tone }] }, back: ... }` nakreslí postavu z dat (tone: primary, secondary, tertiary, inactive, inactive-alt, head). Bez `data.body` zůstane ukázková mapa, takže samostatný náhled funguje dál.
+- `bodyweight: true` u cviku: místo „0 kg × 12“ ukáže „vlastní váha × 12“, s přidanou zátěží „+10 kg × 8“.
+
+Kontrola na Macu: `npm i` a `node design/workout-summary-ember/render/render.cjs <data.json> out.png` (Playwright, potřebuje `npx playwright install chromium`).
+
 ## Licence třetích stran
 
 Fonty Unbounded, Inter Tight a JetBrains Mono: SIL Open Font License 1.1 (`design/workout-summary-ember/fonts/`).
+html-to-image a SVG cesty z react-native-body-highlighter: MIT (`vendor/`, viz `vendor/README.md`).

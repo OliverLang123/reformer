@@ -9,8 +9,10 @@ import {
   fieldsFor, fmtSet, historyBest,
 } from './js/model.js';
 import * as W from './js/workout.js';
+import { buildSummary } from './js/summary.js';
+import { renderImage, shareImage, copyText } from './js/strava.js';
 
-export const VERSION = '0.2.1';
+export const VERSION = '0.3.0';
 
 // ---------- zvuk, displej, čas ----------
 
@@ -152,7 +154,7 @@ function Settings({ data, qs, onSaved, onBack }) {
 
 // ---------- úvodní obrazovka ----------
 
-function Home({ model, active, qs, onStart, onResume, onSettings }) {
+function Home({ model, active, qs, onStart, onResume, onSettings, onOpen }) {
   const routines = useMemo(() => (model ? orderRoutines(model, routineList(model)) : []), [model]);
   const recent = model ? model.workouts.slice(0, 5) : [];
   return html`<main>
@@ -179,7 +181,8 @@ function Home({ model, active, qs, onStart, onResume, onSettings }) {
     ${recent.length > 0 && html`<section class="card">
       <h3>Historie</h3>
       <ul class="history">
-        ${recent.map((w) => html`<li><span>${fmtDate(w.date)}</span><span>${w.routine}</span></li>`)}
+        ${recent.map((w) => html`<li><button class="history-item" onClick=${() => onOpen(w.id)}>
+          <span>${fmtDate(w.date)}</span><span>${w.routine}</span></button></li>`)}
       </ul>
     </section>`}
   </main>`;
@@ -464,7 +467,46 @@ function Finish({ model, w, onSave, onBack, onDiscard }) {
   </main>`;
 }
 
-function Summary({ s, onDone }) {
+// Souhrn do Stravy: název, popis a obrázek ke zkopírování (appka se Stravou nekomunikuje)
+function StravaCard({ s, toast }) {
+  const [img, setImg] = useState({ blob: null, url: null, error: null });
+  const key = JSON.stringify(s.image);
+  useEffect(() => {
+    let alive = true;
+    let url = null;
+    setImg({ blob: null, url: null, error: null });
+    renderImage(s.image)
+      .then((blob) => {
+        if (!alive) return;
+        url = URL.createObjectURL(blob);
+        setImg({ blob, url, error: null });
+      })
+      .catch((e) => { if (alive) setImg({ blob: null, url: null, error: e.message }); });
+    return () => { alive = false; if (url) URL.revokeObjectURL(url); };
+  }, [key]);
+
+  const copy = async (text, what) => toast((await copyText(text)) ? `${what} zkopírován` : 'Kopírování se nepovedlo');
+  async function save() {
+    const r = await shareImage(img.blob, s.fileName);
+    if (r === 'downloaded') toast('Obrázek stažen');
+  }
+  return html`<section class="card strava">
+    <h3>Souhrn do Stravy</h3>
+    <div class="strava-img">
+      ${img.url ? html`<img src=${img.url} alt="Obrázek tréninku pro Stravu" />`
+        : html`<p class="muted center">${img.error ? 'Obrázek: ' + img.error : 'Kreslím obrázek...'}</p>`}
+    </div>
+    <div class="strava-actions">
+      <button onClick=${() => copy(s.name, 'Název')}>Kopírovat název</button>
+      <button onClick=${() => copy(s.description, 'Popis')}>Kopírovat popis</button>
+      <button class="primary" disabled=${!img.blob} onClick=${save}>Uložit obrázek</button>
+    </div>
+    <p class="strava-name">${s.name}</p>
+    <pre class="strava-desc">${s.description}</pre>
+  </section>`;
+}
+
+function Summary({ s, onDone, toast }) {
   return html`<main>
     <header class="top"><span></span><h1 class="small">Hotovo</h1><span></span></header>
     <section class="card">
@@ -475,9 +517,19 @@ function Summary({ s, onDone }) {
         <div><small>Série</small><strong>${s.sets}</strong></div>
       </div>
       ${s.prs.length > 0 && html`<h3>Nová maxima</h3><ul class="prs">${s.prs.map((p) => html`<li>🏆 ${p.exercise} ${fmtSet(p, p.mode)}</li>`)}</ul>`}
-      <p class="muted">Trénink se ukládá do tabulky na pozadí. Souhrn do Stravy přibude v další verzi.</p>
+      <p class="muted">Trénink se ukládá do tabulky na pozadí.</p>
     </section>
+    ${s.strava && html`<${StravaCard} s=${s.strava} toast=${toast} />`}
     <button class="primary wide" onClick=${onDone}>Zpět na úvod</button>
+  </main>`;
+}
+
+// Souhrn staršího tréninku z historie
+function WorkoutSummary({ model, id, onBack, toast }) {
+  const s = useMemo(() => buildSummary(model, id), [model, id]);
+  return html`<main>
+    <header class="top"><button class="link" onClick=${onBack}>Zpět</button><h1 class="small">Trénink</h1><span></span></header>
+    ${s ? html`<${StravaCard} s=${s} toast=${toast} />` : html`<p class="muted center">Trénink už v datech není.</p>`}
   </main>`;
 }
 
@@ -490,6 +542,7 @@ function App() {
   const [active, setActiveState] = useState(getActive());
   const [view, setView] = useState(getConfig() ? (getActive() ? 'workout' : 'home') : 'settings');
   const [summary, setSummary] = useState(null);
+  const [openId, setOpenId] = useState(null);
   const [toastText, setToastText] = useState('');
   const toast = (t) => { setToastText(t); setTimeout(() => setToastText(''), 3000); };
 
@@ -560,7 +613,14 @@ function App() {
     const st = W.stats(w, model);
     const snap = W.snapshot(w, end);
     enqueueSave(snap.workout, snap.sets);
-    setSummary({ title: w.title, duration: Date.now() - new Date(w.start).getTime(), ...st });
+    // Souhrn do Stravy hned z uloženého stavu (trénink z fronty po odeslání na chvíli z modelu zmizí)
+    let strava = null;
+    try {
+      strava = buildSummary(buildModel(data, { ...getQueue(), [snap.workout.id]: { op: 'save', workout: snap.workout, sets: snap.sets } }), snap.workout.id);
+    } catch (e) {
+      toast('Souhrn do Stravy: ' + e.message);
+    }
+    setSummary({ title: w.title, duration: Date.now() - new Date(w.start).getTime(), ...st, strava });
     setActive(null);
     setView('summary');
   }
@@ -578,10 +638,13 @@ function App() {
   } else if (view === 'finish' && active) {
     screen = html`<${Finish} model=${model} w=${active} onSave=${save} onBack=${() => setView('workout')} onDiscard=${discard} />`;
   } else if (view === 'summary' && summary) {
-    screen = html`<${Summary} s=${summary} onDone=${() => { setSummary(null); setView('home'); refresh(); }} />`;
+    screen = html`<${Summary} s=${summary} toast=${toast} onDone=${() => { setSummary(null); setView('home'); refresh(); }} />`;
+  } else if (view === 'past' && openId) {
+    screen = html`<${WorkoutSummary} model=${model} id=${openId} toast=${toast} onBack=${() => setView('home')} />`;
   } else {
     screen = html`<${Home} model=${model} active=${active} qs=${qs} onStart=${start}
-      onResume=${() => setView('workout')} onSettings=${() => setView('settings')} />`;
+      onResume=${() => setView('workout')} onSettings=${() => setView('settings')}
+      onOpen=${(id) => { setOpenId(id); setView('past'); }} />`;
   }
   return html`${screen}<${Toast} text=${toastText} />`;
 }

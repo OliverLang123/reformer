@@ -1,5 +1,5 @@
 // Při každé změně souborů appky zvyš verzi, ať si telefon stáhne novou kopii.
-const CACHE = 'reformer-v0.2.1';
+const CACHE = 'reformer-v0.3.0';
 
 const SHELL = [
   './',
@@ -10,7 +10,17 @@ const SHELL = [
   'js/store.js',
   'js/model.js',
   'js/workout.js',
+  'js/summary.js',
+  'js/body-map.js',
+  'js/strava.js',
   'vendor/htm-preact.module.js',
+  'vendor/html-to-image.js',
+  // obrázek do Stravy: šablona a fonty (musí jít i offline)
+  'design/workout-summary-ember/template/summary.html',
+  'design/workout-summary-ember/fonts/fonts.css',
+  ...['inter-tight-latin', 'inter-tight-latin-ext'].flatMap((f) => [400, 500, 600, 700].map((w) => `design/workout-summary-ember/fonts/${f}-${w}-normal.woff2`)),
+  ...['jetbrains-mono-latin', 'jetbrains-mono-latin-ext'].flatMap((f) => [500, 700].map((w) => `design/workout-summary-ember/fonts/${f}-${w}-normal.woff2`)),
+  ...['unbounded-latin', 'unbounded-latin-ext'].flatMap((f) => [600, 700].map((w) => `design/workout-summary-ember/fonts/${f}-${w}-normal.woff2`)),
   'manifest.webmanifest',
   'icons/icon-192.png',
   'icons/icon-512.png',
@@ -36,13 +46,15 @@ self.addEventListener('fetch', (event) => {
 
   event.respondWith(
     caches.open(CACHE).then(async (cache) => {
-      const cached = await cache.match(req, { ignoreSearch: true })
-        || (req.mode === 'navigate' ? await cache.match('index.html') : undefined);
+      const cached = await cache.match(req, { ignoreSearch: true });
       const fresh = fetch(req).then((res) => {
         if (res.ok) cache.put(req, res.clone());
         return res;
-      }).catch(() => cached);
-      return cached || fresh;
+      }).catch(() => null);
+      if (cached) return cached;
+      // Bez signálu: stránka, která v mezipaměti není, dostane úvod appky
+      const res = await fresh;
+      return res || (req.mode === 'navigate' ? cache.match('index.html') : Response.error());
     })
   );
 });

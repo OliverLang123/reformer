@@ -13,7 +13,7 @@ Termín: v pondělí 9. 11. 2026 odcvičit Silový trénink A v appce. Nutné js
 | 2 | zápis tréninku jako v Hevy, offline, fronta k odeslání | hotovo |
 | 3 | import historie z Hevy skriptem (zkušební běh, pak odeslání) | hotovo |
 | 4 | přehledy ze vzorců: Maxima, Objem po týdnech, Poslední trénink, Tento týden | hotovo |
-| 5 | souhrn do Stravy: název, popis, obrázek Ember se svalovou mapou | čeká |
+| 5 | souhrn do Stravy: název, popis, obrázek Ember se svalovou mapou | hotovo, čeká test na iPhonu |
 | 6 | karty cviků, historie s úpravami, vlastní videa | čeká |
 
 ## Technické dohody
@@ -111,6 +111,21 @@ Zbývá:
 - Detail tréninku v Historii (série, objem) appka zatím nemá, patří do etapy 6.
 - Otevřené: cviky „(Weighted)“ z Hevy (Chest Dip, Triceps Dip, Back Extension) mají Zápis váha × opakování, takže se jim do objemu nepočítá tělesná váha.
 
-## Další krok: etapa 5
+## Etapa 5
 
-Souhrn do Stravy: název, popis, obrázek Ember se svalovou mapou (SPEC.md, sekce „Po tréninku: souhrn do Stravy“, předloha design/workout-summary-ember/).
+Hotovo (4. 11.), verze appky 0.3.0:
+- `js/summary.js`: z uloženého tréninku v modelu sestaví název (rutina), popis podle SPEC (všechny série, supersety na jednom řádku s „ · “, cviky bez váhy „3×15“, nová maxima, celkem zvednuto · pracovní série · délka) a data pro šablonu (label a title z rutiny, 4 cviky s největším objemem bez cviků na čas, top/previous/isPR, personalRecord mimo vybrané 4, objem jako ve vzorci, svalová mapa podle bodů 1 / 0,5).
+- `js/strava.js`: šablona v rámu mimo obrazovku, html-to-image 1.11.13 (`vendor/`) udělá PNG, první snímek se zahodí (Safari). Uložit obrázek = Web Share API se souborem, jinak stažení. Kopírování přes schránku.
+- `js/body-map.js`: SVG cesty postavy z react-native-body-highlighter 3.2.0 (`tools/extract-body.mjs`), licence ve `vendor/`.
+- Šablona: `data.body` (postava z dat, viewBox se zúží na obrys) a `bodyweight` (vlastní váha). Bez `data.body` se kreslí původní ukázka.
+- Obrazovky: Hotovo má sekci Souhrn do Stravy; řádek v Historii otevře souhrn tréninku (obrázek a popis se všemi sériemi, do etapy 6 slouží i jako náhled tréninku).
+- Service worker: šablona, fonty (16 souborů woff2) a html-to-image v mezipaměti. Opravená chyba: stránka, která v mezipaměti nebyla, dostala místo sebe úvod appky (i online); teď se úvod vrací jen bez signálu.
+- Ověřeno v headless Chromu (Playwright s nainstalovaným Chromem, stažení Chromia pro Playwright tady neprošlo): sample-data a edge-case-data proti `preview/` po pixelech: snímek stránky 0,5 % pixelů jinak, html-to-image 1,4 % (vyhlazení písma, výpustka o písmeno jinde), vzhled shodný. Trénink z 2. 11. z exportu Hevy: popis a objem 9 055 kg sedí s tabulkou, postava nohy hlavní. Celý tok s náhradním API: trénink, Dokončit, Uložit, obrázek, Kopírovat popis. Offline: obrázek se vykreslí bez sítě.
+
+Zbývá:
+- Oliver na iPhonu: po Obnovit data ťuknout na trénink v Historii, zkontrolovat obrázek (fonty, postava už v prvním snímku), Uložit obrázek do Fotek, Kopírovat název a popis, a totéž v režimu letadlo.
+- Partie mají vyplněné jen cviky ze seznamu 34. Cviky z Hevy bez partií se do svalové mapy nepočítají.
+
+## Další krok: etapa 6
+
+Karty cviků, historie s úpravami (detail tréninku, úpravy, smazání), vlastní videa.

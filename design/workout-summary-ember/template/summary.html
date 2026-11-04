@@ -292,6 +292,39 @@
   }
   function kg(w) { return nfKg.format(w); }
   function setText(w, r) { return kg(w) + ' kg × ' + r; }
+  // Reformer: cviky s vlastní vahou (bodyweight: true) mají ve weightKg přidanou zátěž
+  function exSet(ex, s) {
+    if (!ex.bodyweight) return setText(s.weightKg, s.reps);
+    return s.weightKg > 0 ? '+' + setText(s.weightKg, s.reps) : 'vlastní váha × ' + s.reps;
+  }
+  function exPrev(ex, s) {
+    if (!ex.bodyweight) return kg(s.weightKg) + ' × ' + s.reps;
+    return s.weightKg > 0 ? '+' + kg(s.weightKg) + ' × ' + s.reps : String(s.reps);
+  }
+
+  // Reformer: svalová mapa z dat. data.body = { front: { viewBox, parts: [{ d, tone }] }, back: ... },
+  // tone je primary, secondary, tertiary, inactive, inactive-alt nebo head. Bez data.body zůstane
+  // ukázková mapa ze šablony. viewBox se po vykreslení zúží na obrys postavy.
+  var SVG_NS = 'http://www.w3.org/2000/svg';
+  function drawBody(body) {
+    var svgs = document.querySelectorAll('.figure svg');
+    ['front', 'back'].forEach(function (side, i) {
+      var fig = body[side];
+      var svg = svgs[i];
+      if (!fig || !svg) return;
+      svg.textContent = '';
+      svg.setAttribute('viewBox', fig.viewBox);
+      fig.parts.forEach(function (part) {
+        var path = document.createElementNS(SVG_NS, 'path');
+        path.setAttribute('class', 'muscle muscle--' + part.tone);
+        path.setAttribute('style', 'fill: var(--muscle-' + part.tone + ')');
+        path.setAttribute('d', part.d);
+        svg.appendChild(path);
+      });
+      var b = svg.getBBox();
+      if (b.width && b.height) svg.setAttribute('viewBox', [b.x, b.y, b.width, b.height].join(' '));
+    });
+  }
   function parseDate(s) { var p = s.split('-').map(Number); return new Date(p[0], p[1] - 1, p[2]); }
 
   var ICON_UP = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5.5 11.5L12 5l6.5 6.5"/></svg>';
@@ -344,6 +377,8 @@
     root.style.setProperty('--muscle-secondary', mix(accent, tile, 0.6));
     root.style.setProperty('--muscle-tertiary', mix(accent, tile, 0.3));
 
+    if (data.body) drawBody(data.body);
+
     // header
     bind('label', data.label || 'Silový trénink');
     var d = parseDate(data.date);
@@ -371,8 +406,8 @@
       if (ex.isPR) nameRow.appendChild(el('span', 'badge-max', 'MAX'));
       main.appendChild(nameRow);
       var sets = el('span', 'ex__sets');
-      sets.appendChild(el('span', 'ex__top', setText(ex.top.weightKg, ex.top.reps)));
-      if (ex.previous) sets.appendChild(el('span', 'ex__prev', 'minule ' + kg(ex.previous.weightKg) + ' × ' + ex.previous.reps));
+      sets.appendChild(el('span', 'ex__top', exSet(ex, ex.top)));
+      if (ex.previous) sets.appendChild(el('span', 'ex__prev', 'minule ' + exPrev(ex, ex.previous)));
       main.appendChild(sets);
       row.appendChild(main);
 
@@ -403,7 +438,7 @@
       tilePr.classList.remove('tile-pr--neutral');
       bind('prLabel', 'Nové maximum');
       bind('prName', pr.name);
-      bind('prValue', setText(pr.top.weightKg, pr.top.reps));
+      bind('prValue', exSet(pr, pr.top));
       var dl2 = delta(pr);
       bind('prNote', dl2.kind === 'new' ? 'první záznam' : (dl2.kind === 'up' ? dl2.text + ' oproti minule' : 'osobní rekord'));
     } else {
@@ -411,7 +446,7 @@
       tilePr.classList.add('tile-pr--neutral');
       bind('prLabel', 'Nejtěžší série');
       bind('prName', heavy ? heavy.name : '');
-      bind('prValue', heavy ? setText(heavy.top.weightKg, heavy.top.reps) : '');
+      bind('prValue', heavy ? exSet(heavy, heavy.top) : '');
       bind('prNote', 'dnešní top set');
     }
 
