@@ -14,7 +14,7 @@ Termín: v pondělí 9. 11. 2026 odcvičit Silový trénink A v appce. Nutné js
 | 3 | import historie z Hevy skriptem (zkušební běh, pak odeslání) | hotovo |
 | 4 | přehledy ze vzorců: Maxima, Objem po týdnech, Poslední trénink, Tento týden | hotovo |
 | 5 | souhrn do Stravy: název, popis, obrázek Ember se svalovou mapou | hotovo, čeká test na iPhonu |
-| 6 | karty cviků, historie s úpravami, vlastní videa | čeká |
+| 6 | karty cviků, historie s úpravami, vlastní videa | hotovo, čeká povolení Drive a test na iPhonu |
 
 ## Technické dohody
 
@@ -126,6 +126,21 @@ Zbývá:
 - Oliver na iPhonu: po Obnovit data ťuknout na trénink v Historii, zkontrolovat obrázek (fonty, postava už v prvním snímku), Uložit obrázek do Fotek, Kopírovat název a popis, a totéž v režimu letadlo.
 - Partie mají vyplněné jen cviky ze seznamu 34. Cviky z Hevy bez partií se do svalové mapy nepočítají.
 
-## Další krok: etapa 6
+## Etapa 6
 
-Karty cviků, historie s úpravami (detail tréninku, úpravy, smazání), vlastní videa.
+Hotovo (4. 11.):
+- 0.4.0 Historie: na úvodu odkaz Celá historie (po měsících), detail tréninku (čas, délka, objem, série po cvicích s typy a opakováními v záloze, poznámka, souhrn do Stravy), Upravit a Smazat. Úprava používá obrazovku tréninku (`W.fromSaved`, režim `edit`: bez odpočinku, Wake Lock a dotazu po 3 h, MINULE jen z dřívějších tréninků, poznámka k tréninku dole), do tabulky jde až po Uložit se stejnými ID sérií. Smazání přes frontu (`deleteWorkout`).
+- Opravená chyba: po odeslání z fronty trénink zmizel z modelu a appka do Obnovit data ukazovala starý stav. Teď se odeslaná změna zapíše i do dat v telefonu (`applyToCache`, `dataVersion`).
+- Karty cviků: na úvodu tlačítko Cviky, seznam s hledáním bez diakritiky (počet tréninků, naposledy), karta cviku s celou historií (po 20 starších).
+- 0.5.0 Videa a fotky: `apps-script/Media.js` (`uploadMedia`, `getMedia`, `authorizeDrive`), složka „Reformer média“ vedle tabulky, nové video nebo fotka nahradí staré (staré do koše). Manifest má nově oprávnění `drive`. `js/media.js`: kontrola 20 MB, fotka z prvního snímku (JPEG do 1080 px), nahrání base64, kopie v IndexedDB (`media:<id>`), po Obnovit data se na pozadí stáhnou všechna videa a fotky. Karta cviku: video bez zvuku dokola, jinak fotka, tlačítka Natočit video a Nahrát fotku (iPhone nabídne fotoaparát nebo galerii). V tréninku fotka místo písmene, ťuknutím karta s videem.
+- Ověřeno v headless Chromu s náhradním API: historie (úprava 100 × 10 na 100 × 11 v tabulce, smazání), seznam cviků a hledání, nahrání zkušebního videa (webm) a fotky, přehrávání dokola bez zvuku, offline fotka v kartě i video v detailu.
+- Skript je nahraný (`npm run push`), nasazení zatím na staré verzi.
+
+Zbývá:
+- Oliver: v editoru Apps Script spustit `authorizeDrive` a povolit přístup k Drive. Pak Claude Code `npx clasp update-deployment <ID nasazení>`.
+- Oliver na iPhonu: natočit krátké video u jednoho cviku (video z iPhonu je .mov, tady testované jen webm), zkontrolovat fotku z prvního snímku, přehrávání, a po Obnovit data v režimu letadlo. Projít historii, úpravu a smazání (na zkušebním tréninku).
+- Úprava tréninku z historie se drží jen v paměti: když se appka během úpravy zavře, změny se ztratí.
+
+## Další krok
+
+Etapy 0 až 6 jsou hotové. Zbývají testy na iPhonu (etapy 5 a 6) a pondělní trénink 9. 11.

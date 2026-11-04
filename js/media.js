@@ -1,0 +1,124 @@
+// Vlastní videa a fotky cviků: nahrání přes skript do Drive, kopie v telefonu (IndexedDB),
+// aby se přehrávaly hned a bez signálu. Odkazy jsou v listu Cviky (sloupce Video a Fotka).
+
+import { call, idbGet, idbSet } from './store.js';
+
+export const MAX_BYTES = 20 * 1024 * 1024;
+const urls = new Map(); // id souboru -> object URL (v paměti, dokud appka běží)
+const pending = new Map(); // id souboru -> probíhající stažení
+
+export function fileId(url) {
+  const m = String(url || '').match(/[-\w]{25,}/);
+  return m ? m[0] : null;
+}
+
+function base64ToBlob(b64, mime) {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new Blob([bytes], { type: mime || 'application/octet-stream' });
+}
+
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result).split(',')[1] || '');
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(blob);
+  });
+}
+
+// Object URL souboru: z paměti, z telefonu, jinak stáhne přes skript a uloží
+export async function mediaUrl(id) {
+  if (!id) return null;
+  if (urls.has(id)) return urls.get(id);
+  if (!pending.has(id)) {
+    pending.set(id, (async () => {
+      let blob = await idbGet('media:' + id).catch(() => null);
+      if (!blob) {
+        const r = await call('getMedia', { id }, undefined, 120000);
+        blob = base64ToBlob(r.data, r.mime);
+        await idbSet('media:' + id, blob).catch(() => {});
+      }
+      const url = URL.createObjectURL(blob);
+      urls.set(id, url);
+      return url;
+    })().finally(() => pending.delete(id)));
+  }
+  return pending.get(id);
+}
+
+// Na pozadí stáhne do telefonu všechna videa a fotky, které tam ještě nejsou
+export async function prefetchMedia(exercises) {
+  for (const e of exercises) {
+    for (const link of [e.photo, e.video]) {
+      const id = fileId(link);
+      if (!id || urls.has(id)) continue;
+      try {
+        if (!(await idbGet('media:' + id))) await mediaUrl(id);
+      } catch {
+        return; // bez signálu nebo chyba skriptu: zkusí se při dalším obnovení dat
+      }
+    }
+  }
+}
+
+// Fotka z prvního snímku videa (JPEG, delší strana nejvýš 1080 px)
+export function posterFromVideo(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const v = document.createElement('video');
+    v.muted = true;
+    v.playsInline = true;
+    v.preload = 'auto';
+    const done = (fn, x) => { URL.revokeObjectURL(url); v.removeAttribute('src'); v.load(); fn(x); };
+    const timer = setTimeout(() => done(reject, new Error('Z videa nejde udělat fotka')), 15000);
+    v.addEventListener('loadeddata', () => { v.currentTime = Math.min(0.1, (v.duration || 1) / 2); }, { once: true });
+    v.addEventListener('seeked', () => {
+      clearTimeout(timer);
+      const scale = Math.min(1, 1080 / Math.max(v.videoWidth, v.videoHeight));
+      const c = document.createElement('canvas');
+      c.width = Math.round(v.videoWidth * scale);
+      c.height = Math.round(v.videoHeight * scale);
+      c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+      c.toBlob((b) => (b ? done(resolve, b) : done(reject, new Error('Z videa nejde udělat fotka'))), 'image/jpeg', 0.85);
+    }, { once: true });
+    v.addEventListener('error', () => { clearTimeout(timer); done(reject, new Error('Video nejde přehrát')); }, { once: true });
+    v.src = url;
+  });
+}
+
+function ext(file, fallback) {
+  const m = String(file.name || '').match(/\.([a-z0-9]{2,5})$/i);
+  if (m) return m[1].toLowerCase();
+  const t = String(file.type || '').split('/')[1];
+  return t ? t.replace('quicktime', 'mov').replace('jpeg', 'jpg') : fallback;
+}
+
+async function upload(exercise, kind, blob, extension) {
+  const data = await blobToBase64(blob);
+  const r = await call('uploadMedia', { exercise, kind, mime: blob.type, ext: extension, data }, undefined, 300000);
+  await idbSet('media:' + r.id, blob).catch(() => {});
+  urls.set(r.id, URL.createObjectURL(blob));
+  return r.url;
+}
+
+// Nové video cviku: nahraje video a fotku z jeho prvního snímku. Vrátí { video, photo } odkazy.
+export async function uploadVideo(exercise, file, onStep = () => {}) {
+  if (file.size > MAX_BYTES) throw new Error('Video má víc než 20 MB. Natoč kratší (3 až 8 s) nebo ve Full HD.');
+  onStep('Připravuji fotku...');
+  const poster = await posterFromVideo(file).catch(() => null);
+  onStep('Nahrávám video...');
+  const video = await upload(exercise, 'video', file, ext(file, 'mp4'));
+  let photo = null;
+  if (poster) {
+    onStep('Nahrávám fotku...');
+    photo = await upload(exercise, 'photo', poster, 'jpg');
+  }
+  return { video, photo };
+}
+
+export async function uploadPhoto(exercise, file) {
+  if (file.size > MAX_BYTES) throw new Error('Fotka má víc než 20 MB.');
+  return { photo: await upload(exercise, 'photo', file, ext(file, 'jpg')) };
+}

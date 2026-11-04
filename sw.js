@@ -1,5 +1,5 @@
 // Při každé změně souborů appky zvyš verzi, ať si telefon stáhne novou kopii.
-const CACHE = 'reformer-v0.4.0';
+const CACHE = 'reformer-v0.5.0';
 
 const SHELL = [
   './',
@@ -13,6 +13,7 @@ const SHELL = [
   'js/summary.js',
   'js/body-map.js',
   'js/strava.js',
+  'js/media.js',
   'vendor/htm-preact.module.js',
   'vendor/html-to-image.js',
   // obrázek do Stravy: šablona a fonty (musí jít i offline)

@@ -2,7 +2,7 @@ import { html, render, useState, useEffect, useMemo, useRef } from './vendor/htm
 import { fmtNum, fmtInt, fmtTime, fmtDuration, fmtDate, norm, plural, parseTimeInput, typeTime } from './js/util.js';
 import {
   getConfig, setConfig, getActive, setActive as storeActive, call, loadCachedData, refreshData,
-  getQueue, queueStatus, onQueueChange, enqueueSave, enqueueDelete, flushQueue,
+  getQueue, queueStatus, onQueueChange, enqueueSave, enqueueDelete, flushQueue, updateCachedExercise,
 } from './js/store.js';
 import {
   MODE, buildModel, exerciseInfo, routineList, orderRoutines, previousSession, previousFor,
@@ -11,8 +11,9 @@ import {
 import * as W from './js/workout.js';
 import { buildSummary } from './js/summary.js';
 import { renderImage, shareImage, copyText } from './js/strava.js';
+import { fileId, mediaUrl, prefetchMedia, uploadVideo, uploadPhoto } from './js/media.js';
 
-export const VERSION = '0.4.0';
+export const VERSION = '0.5.0';
 
 // ---------- zvuk, displej, čas ----------
 
@@ -155,7 +156,7 @@ function Settings({ data, qs, onSaved, onBack }) {
 
 // ---------- úvodní obrazovka ----------
 
-function Home({ model, active, qs, onStart, onResume, onSettings, onOpen, onHistory }) {
+function Home({ model, active, qs, onStart, onResume, onSettings, onOpen, onHistory, onExercises }) {
   const routines = useMemo(() => (model ? orderRoutines(model, routineList(model)) : []), [model]);
   const recent = model ? model.workouts.slice(0, 5) : [];
   return html`<main>
@@ -178,7 +179,10 @@ function Home({ model, active, qs, onStart, onResume, onSettings, onOpen, onHist
       <button class="primary wide" onClick=${() => onStart(r)}>Začít trénink</button>
     </section>`)}
     ${model && !routines.length && html`<p class="muted">V listu Rutiny zatím nic není.</p>`}
-    ${model && html`<button class="wide" onClick=${() => onStart(null)}>Prázdný trénink</button>`}
+    ${model && html`<div class="row-btns">
+      <button onClick=${() => onStart(null)}>Prázdný trénink</button>
+      <button onClick=${onExercises}>Cviky</button>
+    </div>`}
     ${recent.length > 0 && html`<section class="card">
       <h3>Historie</h3>
       <ul class="history">
@@ -236,6 +240,7 @@ function SetRow({ w, ex, set, idx, info, prev, onUpdate, onConfirm, onType }) {
 
 function ExerciseCard({ w, ex, model, onUpdate, onMenu, onDetail, onRest, onType, toast }) {
   const info = exerciseInfo(model, ex.name);
+  const photo = useMedia(info.photo);
   const prevSes = previousSession(model, ex.name, w.id, w.edit ? w.start : null);
   const fields = fieldsFor(info.mode);
   const head = { kg: info.mode === MODE.BODY ? '+KG' : 'KG', reps: 'OPAK.', time: 'ČAS', km: 'KM' };
@@ -258,7 +263,7 @@ function ExerciseCard({ w, ex, model, onUpdate, onMenu, onDetail, onRest, onType
   return html`<section class=${'card exercise' + (ex.superset ? ' superset' : '')} data-ss=${ex.superset || ''}>
     <div class="ex-head">
       <button class="ex-title" onClick=${() => onDetail(ex.name)}>
-        <span class="thumb">${(info.cz || info.name).slice(0, 1).toUpperCase()}</span>
+        <span class="thumb">${photo ? html`<img src=${photo} alt="" />` : (info.cz || info.name).slice(0, 1).toUpperCase()}</span>
         <span><strong>${ex.name}</strong>${info.cz && html`<small>${info.cz}</small>`}</span>
       </button>
       <button class="icon" onClick=${() => onMenu(ex.key)} aria-label="Menu cviku">⋮</button>
@@ -326,7 +331,57 @@ function ExercisePicker({ model, onPick, onClose, title }) {
   </${Sheet}>`;
 }
 
-function ExerciseDetail({ model, name, onClose }) {
+// Object URL videa nebo fotky z odkazu v listu Cviky (z telefonu, jinak stáhne)
+function useMedia(link) {
+  const [url, setUrl] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    setUrl(null);
+    const id = fileId(link);
+    if (id) mediaUrl(id).then((u) => { if (alive) setUrl(u); }).catch(() => {});
+    return () => { alive = false; };
+  }, [link]);
+  return url;
+}
+
+// Video (bez zvuku, dokola) nebo fotka cviku a tlačítka pro nahrání
+function ExerciseMedia({ info, onMedia }) {
+  const video = useMedia(info.video);
+  const photo = useMedia(info.photo);
+  const [busy, setBusy] = useState('');
+  const [err, setErr] = useState('');
+  async function pick(e, kind) {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    setErr('');
+    try {
+      const links = kind === 'video' ? await uploadVideo(info.name, file, setBusy) : (setBusy('Nahrávám fotku...'), await uploadPhoto(info.name, file));
+      const fields = {};
+      if (links.video) fields.video = links.video;
+      if (links.photo) fields.photo = links.photo;
+      await onMedia(info.name, fields);
+    } catch (x) {
+      setErr(x.message || String(x));
+    } finally {
+      setBusy('');
+    }
+  }
+  const has = info.video || info.photo;
+  return html`<div class="media">
+    ${video ? html`<video class="media-view" src=${video} poster=${photo || undefined} autoplay muted loop playsinline></video>`
+      : photo ? html`<img class="media-view" src=${photo} alt="" />`
+      : has ? html`<div class="media-view empty">Načítám video...</div>` : null}
+    <div class="row-btns">
+      <label class="btn">${info.video ? 'Nové video' : 'Natočit video'}<input type="file" accept="video/*" hidden disabled=${!!busy} onChange=${(e) => pick(e, 'video')} /></label>
+      <label class="btn">${info.photo ? 'Nová fotka' : 'Nahrát fotku'}<input type="file" accept="image/*" hidden disabled=${!!busy} onChange=${(e) => pick(e, 'photo')} /></label>
+    </div>
+    ${busy && html`<p class="muted">${busy}</p>`}
+    ${err && html`<p class="warn">${err}</p>`}
+  </div>`;
+}
+
+function ExerciseDetail({ model, name, onClose, onMedia }) {
   const info = exerciseInfo(model, name);
   const best = historyBest(model, name, info.mode, null);
   let bestDate = '';
@@ -334,21 +389,26 @@ function ExerciseDetail({ model, name, onClose }) {
     const h = (model.history.get(name) || []).find((x) => x.sets.includes(best));
     bestDate = h ? fmtDate(h.date) : '';
   }
-  const sessions = (model.history.get(name) || []).slice(0, 5);
+  const [shown, setShown] = useState(5);
+  const all = model.history.get(name) || [];
+  const sessions = all.slice(0, shown);
   return html`<${Sheet} onClose=${onClose} full>
     <div class="sheet-head"><strong>${info.name}</strong><button class="link" onClick=${onClose}>Zavřít</button></div>
     ${info.cz && html`<p class="muted">${info.cz}</p>`}
+    <${ExerciseMedia} info=${info} onMedia=${onMedia} />
     ${info.coach && html`<p class="pinned">📌 ${info.coach}</p>`}
     ${info.howto.length > 0 && html`<h3>Provedení</h3><ul class="howto">${info.howto.map((b) => html`<li>${b}</li>`)}</ul>`}
     ${(info.primary.length > 0 || info.secondary.length > 0) && html`<p class="muted">Partie: ${info.primary.join(', ')}${info.secondary.length ? ' · vedlejší: ' + info.secondary.join(', ') : ''}</p>`}
     ${best && html`<h3>Maximum</h3><p>${fmtSet(best, info.mode)}${bestDate ? ', ' + bestDate : ''}</p>`}
     ${sessions.length > 0 && html`<h3>Historie</h3><ul class="history">
       ${sessions.map((s) => html`<li><span>${fmtDate(s.date)}</span><span>${s.sets.map((x) => fmtSet(x, info.mode)).join(', ')}</span></li>`)}
-    </ul>`}
+    </ul>
+    ${all.length > shown && html`<button class="link small" onClick=${() => setShown(shown + 20)}>Starší (${all.length - shown})</button>`}`}
+    ${!all.length && html`<p class="muted">Cvik zatím nemá žádný trénink.</p>`}
   </${Sheet}>`;
 }
 
-function Workout({ model, w, qs, onUpdate, onFinish, onDiscard, onHome }) {
+function Workout({ model, w, qs, onUpdate, onFinish, onDiscard, onHome, onMedia }) {
   useWakeLock(!w.edit);
   const now = useNow(1000);
   const st = W.stats(w, model);
@@ -408,7 +468,7 @@ function Workout({ model, w, qs, onUpdate, onFinish, onDiscard, onHome }) {
         onUpdate((cur) => (picker.mode === 'add' ? W.addExercise(cur, name) : W.replaceExercise(cur, picker.key, name)), true);
         setPicker(null);
       }} />`}
-    ${detail && html`<${ExerciseDetail} model=${model} name=${detail} onClose=${() => setDetail(null)} />`}
+    ${detail && html`<${ExerciseDetail} model=${model} name=${detail} onMedia=${onMedia} onClose=${() => setDetail(null)} />`}
     ${menuEx && html`<${Sheet} onClose=${() => setMenu(null)}>
       <div class="sheet-head"><strong>${menuEx.name}</strong></div>
       <div class="menu">
@@ -530,6 +590,32 @@ function Summary({ s, onDone, toast }) {
   </main>`;
 }
 
+function Exercises({ model, onBack, onMedia }) {
+  const [q, setQ] = useState('');
+  const [detail, setDetail] = useState(null);
+  const list = useMemo(() => {
+    const nq = norm(q.trim());
+    return [...model.exercises.values()]
+      .filter((e) => !nq || norm(e.name + ' ' + e.cz).includes(nq))
+      .map((e) => {
+        const h = model.history.get(e.name) || [];
+        return { ...e, count: h.length, last: h.length ? h[0].date : '' };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name, 'cs'));
+  }, [q, model]);
+  return html`<main>
+    <header class="top"><button class="link" onClick=${onBack}>Zpět</button><h1 class="small">Cviky</h1><span></span></header>
+    <input class="search" type="search" placeholder="Hledat cvik" value=${q} onInput=${(e) => setQ(e.target.value)} />
+    <ul class="pick-list">
+      ${list.map((e) => html`<li><button onClick=${() => setDetail(e.name)}>
+        <strong>${e.name}</strong>
+        <small>${[e.cz, e.count ? `${e.count}× · naposledy ${fmtDate(e.last)}` : 'zatím necvičeno'].filter(Boolean).join(' · ')}</small>
+      </button></li>`)}
+    </ul>
+    ${detail && html`<${ExerciseDetail} model=${model} name=${detail} onMedia=${onMedia} onClose=${() => setDetail(null)} />`}
+  </main>`;
+}
+
 const MONTHS = ['leden', 'únor', 'březen', 'duben', 'květen', 'červen', 'červenec', 'srpen', 'září', 'říjen', 'listopad', 'prosinec'];
 
 function History({ model, onOpen, onBack }) {
@@ -624,9 +710,17 @@ function App() {
     if (qs.dataVersion) loadCachedData().then((d) => { if (d) setData(d); }).catch(() => {});
   }, [qs.dataVersion]);
 
+  async function onMedia(name, fields) {
+    const d = await updateCachedExercise(name, fields);
+    if (d) setData({ ...d });
+    toast('Uloženo do Drive');
+  }
+
   async function refresh() {
     try {
-      setData(await refreshData());
+      const d = await refreshData();
+      setData(d);
+      prefetchMedia(d.exercises || []);
     } catch (e) {
       toast('Data z tabulky: ' + e.message);
     }
@@ -745,15 +839,17 @@ function App() {
   } else if (!model) {
     screen = html`<main><p class="muted center">Načítám data z tabulky...</p></main>`;
   } else if (view === 'workout' && active) {
-    screen = html`<${Workout} model=${model} w=${active} qs=${qs} onUpdate=${update}
+    screen = html`<${Workout} model=${model} w=${active} qs=${qs} onUpdate=${update} onMedia=${onMedia}
       onFinish=${() => setView('finish')} onDiscard=${discard} onHome=${() => setView('home')} />`;
   } else if (view === 'finish' && active) {
     screen = html`<${Finish} model=${model} w=${active} onSave=${save} onBack=${() => setView('workout')} onDiscard=${discard} />`;
   } else if (view === 'summary' && summary) {
     screen = html`<${Summary} s=${summary} toast=${toast} onDone=${() => { setSummary(null); setView('home'); refresh(); }} />`;
   } else if (view === 'edit' && editing) {
-    screen = html`<${Workout} model=${model} w=${editing} qs=${qs} onUpdate=${updateEdit}
+    screen = html`<${Workout} model=${model} w=${editing} qs=${qs} onUpdate=${updateEdit} onMedia=${onMedia}
       onFinish=${saveEdit} onDiscard=${cancelEdit} onHome=${cancelEdit} />`;
+  } else if (view === 'exercises') {
+    screen = html`<${Exercises} model=${model} onMedia=${onMedia} onBack=${() => setView('home')} />`;
   } else if (view === 'history') {
     screen = html`<${History} model=${model} onOpen=${(id) => openPast(id, 'history')} onBack=${() => setView('home')} />`;
   } else if (view === 'past' && openId) {
@@ -762,7 +858,8 @@ function App() {
   } else {
     screen = html`<${Home} model=${model} active=${active} qs=${qs} onStart=${start}
       onResume=${() => setView('workout')} onSettings=${() => setView('settings')}
-      onOpen=${(id) => openPast(id, 'home')} onHistory=${() => setView('history')} />`;
+      onOpen=${(id) => openPast(id, 'home')} onHistory=${() => setView('history')}
+      onExercises=${() => setView('exercises')} />`;
   }
   return html`${screen}<${Toast} text=${toastText} />`;
 }

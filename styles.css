@@ -362,3 +362,14 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 0.8; }
 .past-ex ol { margin: 6px 0 0; padding-left: 22px; font-variant-numeric: tabular-nums; }
 .past-ex ol li { padding: 1px 0; }
 .past-ex .tag { font-size: 12px; color: var(--accent); }
+
+/* Videa a fotky cviků */
+.thumb { overflow: hidden; }
+.thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.media { margin: 8px 0 12px; }
+.media-view { display: block; width: 100%; max-height: 60vh; object-fit: contain; border-radius: 12px; background: #000; margin-bottom: 8px; }
+.media-view.empty { aspect-ratio: 9 / 16; max-height: 40vh; display: grid; place-items: center; color: #8a9099; font-size: 14px; }
+label.btn {
+  flex: 1; display: flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 14px;
+  border-radius: 10px; background: var(--surface-2); color: var(--text); cursor: pointer;
+}

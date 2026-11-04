@@ -102,6 +102,17 @@ export async function call(action, params = {}, config = getConfig(), timeoutMs 
 
 export const loadCachedData = () => idbGet('bootstrap');
 
+// Změna cviku (odkaz na video nebo fotku) rovnou v datech v telefonu
+export async function updateCachedExercise(name, fields) {
+  const data = await idbGet('bootstrap');
+  if (!data) return null;
+  const ex = (data.exercises || []).find((e) => String(e.name) === name);
+  if (ex) Object.assign(ex, fields);
+  else data.exercises.push({ name, ...fields });
+  await idbSet('bootstrap', data);
+  return data;
+}
+
 export async function refreshData() {
   const data = await call('bootstrap', {}, getConfig(), 60000);
   const clean = {

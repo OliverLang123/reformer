@@ -17,6 +17,7 @@ V repozitáři není žádný klíč, adresa skriptu ani osobní data. Adresu sk
 | `js/workout.js` | rozpracovaný trénink: série, supersety, odpočinek, nové maximum, podklad pro tabulku |
 | `js/summary.js` | souhrn do Stravy: název, popis a data pro obrázek (výběr cviků, vs. minule, maxima, svalová mapa) |
 | `js/strava.js` | obrázek PNG ze šablony (skrytý rám + html-to-image), sdílení, kopírování |
+| `js/media.js` | vlastní videa a fotky cviků: nahrání přes skript, fotka z prvního snímku videa, kopie v telefonu |
 | `js/body-map.js` | SVG cesty postavy z react-native-body-highlighter (generuje `tools/extract-body.mjs`) |
 | `vendor/` | přibalené knihovny (viz `vendor/README.md`) |
 | `sw.js` | service worker (offline) |
@@ -32,6 +33,7 @@ Skript je připojený k tabulce a nahrává se přes [clasp](https://github.com/
 - `npm run push` nahraje kód, `npx clasp update-deployment <ID nasazení>` nasadí novou verzi webové appky na stejnou adresu.
 - `setup` (spouští se v editoru) založí listy, formáty, vzorec Objem a výchozí cviky. Jde pustit opakovaně, nic nepřepíše.
 - Klíč je ve Vlastnostech skriptu pod názvem `API_KEY`.
+- Videa a fotky potřebují přístup k Drive: po prvním nahrání skriptu s `Media.js` spustit v editoru `authorizeDrive` a povolit oprávnění, teprve pak nasadit novou verzi.
 
 API: `POST` na adresu webové appky, tělo JSON jako `text/plain` (bez předběžného dotazu CORS): `{ "key": "...", "action": "...", ... }`. Odpověď `{ "ok": true, ... }` nebo `{ "ok": false, "error": "..." }`.
 
@@ -41,6 +43,8 @@ API: `POST` na adresu webové appky, tělo JSON jako `text/plain` (bez předbě�
 | `bootstrap` | | `exercises`, `routines`, `body`, `workouts`, `sets` (klíče podle `apps-script/Schema.js`) |
 | `saveWorkout` | `workout`, `sets` | uloží trénink a jeho série podle ID; série tréninku, které v požadavku chybí, smaže; opakování nic nezdvojí |
 | `deleteWorkout` | `id` | smaže trénink a jeho série |
+| `uploadMedia` | `exercise`, `kind` (`video` / `photo`), `mime`, `ext`, `data` (base64, nejvýš 20 MB) | uloží soubor do složky „Reformer média“ vedle tabulky, odkaz zapíše do sloupce Video / Fotka v listu Cviky, starý soubor dá do koše |
+| `getMedia` | `id` | `mime`, `data` (base64); jen soubory ze složky „Reformer média“ |
 
 Data a časy jdou v ISO 8601, pole `date` jako `RRRR-MM-DD`, `time` a `rest` jako text `m:ss`.
 
@@ -60,8 +64,8 @@ Názvy listů a sloupců se nemění, podle nich se v tabulce orientuje appka, s
 | Podíl tělesné váhy | 0 až 1, kolik tělesné váhy se počítá do objemu u cviků s vlastní vahou |
 | Provedení | 3 až 5 krátkých bodů, každý na vlastním řádku buňky |
 | Pokyny trenéra | osobní pokyny, v tréninku jako připnutá poznámka |
-| Video | odkaz na video v Drive |
-| Fotka | odkaz na fotku v Drive |
+| Video | odkaz na video v Drive (zapisuje appka, soubor ve složce „Reformer média“) |
+| Fotka | odkaz na fotku v Drive (z prvního snímku videa nebo nahraná zvlášť) |
 
 ### Rutiny (jeden řádek = jedna plánovaná série)
 

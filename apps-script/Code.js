@@ -2,7 +2,7 @@
 // aby prohlížeč neposílal předběžný dotaz CORS): { key, action, ...parametry }.
 // Klíč je ve Vlastnostech skriptu pod názvem API_KEY, v kódu ani v repozitáři není.
 
-const API_VERSION = 1;
+const API_VERSION = 2;
 
 const ACTIONS = {
   ping: () => ({ version: API_VERSION, name: SpreadsheetApp.getActive().getName() }),
@@ -17,6 +17,8 @@ const ACTIONS = {
   saveWorkout: (req) => saveWorkout_(req),
   deleteWorkout: (req) => deleteWorkout_(req),
   importWorkouts: (req) => importWorkouts_(req),
+  uploadMedia: (req) => uploadMedia_(req),
+  getMedia: (req) => getMedia_(req),
 };
 
 function doGet() {
