@@ -11,7 +11,7 @@ Termín: v pondělí 9. 11. 2026 odcvičit Silový trénink A v appce. Nutné js
 | 0 | git, .gitignore, README, kostra PWA (ikona, manifest, service worker), GitHub repozitář a Pages | hotovo |
 | 1 | Apps Script přes clasp, 9 listů, sloupce ID a vzorec Objem, 34 cviků, rutina A (P2), list Tělo z inbody | hotovo |
 | 2 | zápis tréninku jako v Hevy, offline, fronta k odeslání | hotovo |
-| 3 | import historie z Hevy skriptem (zkušební běh, pak odeslání) | hotovo, čeká kontrola v appce |
+| 3 | import historie z Hevy skriptem (zkušební běh, pak odeslání) | hotovo |
 | 4 | přehledy ze vzorců: Maxima, Objem po týdnech, Poslední trénink, Tento týden | hotovo |
 | 5 | souhrn do Stravy: název, popis, obrázek Ember se svalovou mapou | čeká |
 | 6 | karty cviků, historie s úpravami, vlastní videa | čeká |
@@ -91,7 +91,7 @@ Hotovo (3. 11.):
 - Opravené chyby: (1) v prázdném listu Série vzorec Objem vracel prázdný text v N2 a `getLastRow` ho počítal, import tak začal až od řádku 3; teď se zapisuje za poslední řádek s hodnotou v 1. sloupci (`lastRow_`). Prázdný řádek 2 smazán. (2) Smazání řádku 2 rozbilo vzorec Objem (#REF!), protože rozsahy začínaly buňkou B2; teď `INDEX(sloupec; 2):INDEX(sloupec; last)`.
 
 Zbývá:
-- Oliver: v appce Obnovit data, zkontrolovat Historii a MINULE u rutiny A.
+- nic. Oliver v appce zkontroloval (4. 11.): Obnovit data, Historie, MINULE u rutiny A, maximum v detailu cviku.
 - Otevřené: cviky „(Weighted)“ z Hevy (Chest Dip, Triceps Dip, Back Extension) mají Zápis váha × opakování, takže se jim do objemu nepočítá tělesná váha.
 
 Ověřeno po importu (3. 11.): selfTest se všemi OK nad 2 738 sériemi, list Série končí řádkem 2739 bez mezer. Podíl tělesné váhy podle Olivera: Chin Up 1, Chest Dip 1, Side Bend 0,2, Netopýr 0,6, Back Extension (Hyperextension) 0,3.
@@ -108,7 +108,7 @@ Hotovo (4. 11.):
 - Datum u maxima je datum posledního dosažení, stejně jako v detailu cviku v appce.
 
 Zbývá:
-- Oliver: v appce Obnovit data, zkontrolovat Historii a MINULE u rutiny A (z etapy 3).
+- Detail tréninku v Historii (série, objem) appka zatím nemá, patří do etapy 6.
 - Otevřené: cviky „(Weighted)“ z Hevy (Chest Dip, Triceps Dip, Back Extension) mají Zápis váha × opakování, takže se jim do objemu nepočítá tělesná váha.
 
 ## Další krok: etapa 5
