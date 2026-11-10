@@ -14,7 +14,7 @@ V repozitáři není žádný klíč, adresa skriptu ani osobní data. Adresu sk
 | `js/util.js` | čísla s desetinnou čárkou, časy m:ss, ID |
 | `js/store.js` | ukládání v telefonu (localStorage, IndexedDB), volání skriptu, fronta k odeslání |
 | `js/model.js` | rutiny, MINULE, maxima, objem, tělesná váha (stejná pravidla jako vzorec Objem) |
-| `js/workout.js` | rozpracovaný trénink: série, supersety, odpočinek, nové maximum, podklad pro tabulku |
+| `js/workout.js` | rozpracovaný trénink: série, supersety, odpočinek, stopky, nové maximum, podklad pro tabulku |
 | `js/summary.js` | souhrn do Stravy: název, popis a data pro obrázek (výběr cviků, vs. minule, maxima, svalová mapa) |
 | `js/strava.js` | obrázek PNG ze šablony (skrytý rám + html-to-image), sdílení, kopírování |
 | `js/media.js` | vlastní videa a fotky cviků: nahrání přes skript, fotka z prvního snímku videa, kopie v telefonu |
@@ -24,7 +24,7 @@ V repozitáři není žádný klíč, adresa skriptu ani osobní data. Adresu sk
 | `manifest.webmanifest`, `icons/` | instalace na plochu |
 | `design/workout-summary-ember/` | předloha obrázku do Stravy (šablona, fonty OFL, náhledy s ukázkovými čísly); appka kreslí obrázek přímo touto šablonou |
 | `apps-script/` | Google Apps Script u tabulky: založení listů (`setup`), výchozí cviky, API pro appku, `selfTest` |
-| `tools/` | pomocné skripty pro vývoj (`overview-formulas.mjs` vypíše vzorce přehledů v české syntaxi) |
+| `tools/` | pomocné skripty pro vývoj (`overview-formulas.mjs` vypíše vzorce přehledů a Objemu v české syntaxi, `fix-kg.mjs` hromadná oprava KG podle seznamu) |
 
 ## Apps Script
 
@@ -45,8 +45,9 @@ API: `POST` na adresu webové appky, tělo JSON jako `text/plain` (bez předbě�
 | `deleteWorkout` | `id` | smaže trénink a jeho série |
 | `uploadMedia` | `exercise`, `kind` (`video` / `photo`), `mime`, `ext`, `data` (base64, nejvýš 20 MB) | uloží soubor do složky „Reformer média“ vedle tabulky, odkaz zapíše do sloupce Video / Fotka v listu Cviky, starý soubor dá do koše |
 | `getMedia` | `id` | `mime`, `data` (base64); jen soubory ze složky „Reformer média“ |
+| `fixSetKg` | `changes` (`[{ workout, exercise, from, to }]`), `write` | oprava KG v listu Série podle přesného seznamu; zkontroluje počet sérií a současné KG, při rozdílu nezapíše nic; bez `write` jen zkušební běh |
 
-Data a časy jdou v ISO 8601, pole `date` jako `RRRR-MM-DD`, `time` a `rest` jako text `m:ss`.
+Data a časy jdou v ISO 8601, pole `date` jako `RRRR-MM-DD`, `time`, `timeR` a `rest` jako text `m:ss`.
 
 ## Tabulka
 
@@ -66,10 +67,15 @@ Názvy listů a sloupců se nemění, podle nich se v tabulce orientuje appka, s
 | Pokyny trenéra | osobní pokyny, v tréninku jako připnutá poznámka |
 | Video | odkaz na video v Drive (zapisuje appka, soubor ve složce „Reformer média“) |
 | Fotka | odkaz na fotku v Drive (z prvního snímku videa nebo nahraná zvlášť) |
+| Jednoručky | `2` = dvě jednoručky, v KG je váha jedné a do výpočtů se násobí × 2; `1` = jedna jednoručka, v KG je její váha; prázdné = nejde o jednoručky (osa, stroje včetně Iso-Lateral, kladky), v KG je celková váha |
+
+Násobek J = 2 u Jednoručky = 2, jinak 1. Používá se v Objemu, maximech, Tento týden, popisu a obrázku do Stravy.
 
 ### Rutiny (jeden řádek = jedna plánovaná série)
 
 Obsahuje jen aktuální týden, trenér list přepíše.
+
+Pravidlo pro Clauda v chatu: u cviků s Jednoručky = 2 nebo 1 se do KG píše váha jedné jednoručky (Bulgarian Split Squat 20, ne 40).
 
 | Sloupec | Obsah |
 | --- | --- |
@@ -80,7 +86,7 @@ Obsahuje jen aktuální týden, trenér list přepíše.
 | Cvik | Název z listu Cviky |
 | Superset | stejné číslo = stejný superset, prázdné = bez supersetu |
 | Typ | `rozcvička`, `normální`, `do selhání`, `drop` |
-| KG | cílová váha |
+| KG | cílová váha; u jednoruček váha jedné jednoručky (tak, jak se zapisuje v appce) |
 | OPAK. | cílová opakování, číslo nebo rozsah `8-10` |
 | ČAS | `0:30` |
 | KM | vzdálenost |
@@ -101,11 +107,12 @@ ID, Datum, Začátek, Konec, Rutina, Poznámka
 | Pořadí | pořadí cviku v tréninku |
 | Superset | jako v Rutinách |
 | Typ | `rozcvička`, `normální`, `do selhání`, `drop` |
-| KG, OPAK., ČAS, KM | hodnoty podle způsobu zápisu; u cviků na stranu hodnota pro jednu stranu |
+| KG, OPAK., ČAS, KM | hodnoty podle způsobu zápisu; u cviků na stranu hodnota pro jednu stranu; u jednoruček váha jedné jednoručky; u zápisu `čas na stranu` je v ČAS levá strana |
 | V záloze | opakování v záloze 0 až 4, volitelné |
 | Poznámka ke cviku | poznámka ke cviku v tomto tréninku |
 | Potvrzeno | čas potvrzení série |
-| Objem | jen vzorec: KG × OPAK., u cviků na stranu × 2, u vlastní váhy tělesná váha × podíl + přidaná zátěž |
+| ČAS P | čas pravé strany u zápisu `čas na stranu`, jinak prázdné (historie z Hevy ho nemá) |
+| Objem | jen vzorec, musí být poslední sloupec: KG × J × OPAK., u cviků na stranu × 2, u vlastní váhy (tělesná váha × podíl + KG × J) × OPAK. |
 
 ### Tělo (jeden řádek = jedno měření)
 
@@ -120,7 +127,7 @@ Každý list má jediný vzorec v buňce A1 (`apps-script/Overview.js`), který 
 | Řádek | Obsah |
 | --- | --- |
 | 1 až 5 | Datum, Rutina, Začátek a Konec, Objem kg a počet sérií (Sérií, Pracovních = bez rozcviček), Poznámka k tréninku |
-| 7 | záhlaví: Cvik, Pořadí, Superset, Typ, KG, OPAK., ČAS, KM, V záloze, Poznámka ke cviku |
+| 7 | záhlaví: Cvik, Pořadí, Superset, Typ, KG, OPAK., ČAS, KM, V záloze, Poznámka ke cviku, ČAS P, Jednoručky (KG je tak, jak je zapsané, tedy u Jednoručky = 2 váha jedné) |
 | 8 a dál | série v pořadí cviků |
 
 **Tento týden** (pro týdenní hodnocení). Posledních 7 dní včetně dneška.
@@ -132,9 +139,9 @@ Každý list má jediný vzorec v buňce A1 (`apps-script/Overview.js`), který 
 | 4 | záhlaví: Cvik, Tréninků, Sérií, Nejtěžší série, Celkem zvednuto |
 | 5 a dál | cviky v pořadí, jak byly odcvičené |
 
-Nejtěžší série je bez rozcviček: `100 kg × 10`, u vlastní váhy `+10 kg × 8` nebo `14 opak.`, u cviků na čas všechny časy (`2 km 9:12`).
+Nejtěžší série je bez rozcviček, váha jako součet KG × J (dvě jednoručky po 20: `40 kg × 9`): `100 kg × 10`, u vlastní váhy `+10 kg × 8` nebo `14 opak.`, u cviků na čas všechny časy (`2 km 9:12`).
 
-**Maxima:** Cvik, Česky, KG, OPAK., Datum, Zápis. Stejné pravidlo jako appka: jen pracovní série, největší KG, při shodě víc opakování, datum posledního dosažení. U vlastní váhy je KG přidaná zátěž. Cviky na čas a vzdálenost nemají maximum.
+**Maxima:** Cvik, Česky, KG, OPAK., Datum, Zápis. KG je součet KG × J. Stejné pravidlo jako appka: jen pracovní série, největší váha, při shodě víc opakování, datum posledního dosažení. U vlastní váhy je KG přidaná zátěž. Cviky na čas a vzdálenost nemají maximum.
 
 **Objem po týdnech:** Týden od (pondělí), Tréninků, Sérií, Pracovních sérií, Objem kg. Nejnovější týden nahoře. Objem a Sérií včetně rozcviček, ze sloupce Objem v listu Série.
 

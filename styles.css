@@ -373,3 +373,31 @@ label.btn {
   flex: 1; display: flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 14px;
   border-radius: 10px; background: var(--surface-2); color: var(--text); cursor: pointer;
 }
+
+/* ---------- zápis a výpočet (0.6.0) ---------- */
+
+.entry { margin: 2px 0 4px; font-size: 13px; color: var(--muted); }
+.set-calc { font-size: 12px; color: var(--muted); padding: 0 4px 4px 45px; font-variant-numeric: tabular-nums; }
+.past-ex .set-calc { padding: 0; }
+.ex-total { margin: 8px 0 0; font-size: 14px; color: var(--muted); text-align: right; }
+.past-ex .ex-total { text-align: left; margin-top: 2px; }
+
+/* ---------- stopky ---------- */
+
+.watch-ctl {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 4px 6px 45px;
+  font-size: 14px;
+}
+.watch-ctl button { min-height: 36px; padding: 4px 14px; font-size: 15px; }
+.watch-ctl small { color: var(--muted); }
+.watch-ctl.running strong { font-size: 22px; font-variant-numeric: tabular-nums; min-width: 70px; }
+.watch-ctl.running small { flex: 1; }
+.watch-ctl.over strong { color: var(--accent); }
+.watch-x { background: none; font-size: 22px; padding: 0 10px; color: inherit; }
+.watch-bar .watch-mid { flex: 1; display: flex; flex-direction: column; align-items: center; position: relative; }
+.watch-bar .watch-mid small { font-size: 12px; opacity: 0.8; text-align: center; }
+.watch-bar .watch-mid strong { font-size: 32px; }
+.watch-bar.over strong { font-size: 32px; }

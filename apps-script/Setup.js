@@ -47,7 +47,14 @@ function ensureHeaders_(sh, headers, log) {
     log.push('záhlaví ' + sh.getName());
   } else {
     const missing = headers.filter((h) => current.indexOf(h) < 0);
-    if (missing.length) {
+    // Objem (vzorec) musí zůstat poslední, nové sloupce se vloží před něj
+    const vol = current.indexOf('Objem');
+    const data = missing.filter((h) => h !== 'Objem');
+    if (data.length && vol >= 0) {
+      sh.insertColumnsBefore(vol + 1, data.length);
+      sh.getRange(1, vol + 1, 1, data.length).setValues([data]);
+      log.push('doplněné sloupce ' + sh.getName() + ': ' + data.join(', '));
+    } else if (missing.length) {
       sh.getRange(1, lastCol + 1, 1, missing.length).setValues([missing]);
       log.push('doplněné sloupce ' + sh.getName() + ': ' + missing.join(', '));
     }
@@ -70,6 +77,7 @@ function formatSheets_(ss) {
 
   const se = ss.getSheetByName('Série');
   colRange_(se, 'ČAS').setNumberFormat('@');
+  colRange_(se, 'ČAS P').setNumberFormat('@');
   colRange_(se, 'Potvrzeno').setNumberFormat('H:mm:ss');
   colRange_(se, 'Typ').setDataValidation(listRule_(SET_TYPES));
 
@@ -89,13 +97,26 @@ function listRule_(values) {
   return SpreadsheetApp.newDataValidation().requireValueInList(values, true).setAllowInvalid(true).build();
 }
 
-// Objem jedné série: KG × OPAK., u cviků na stranu × 2, u vlastní váhy
-// (tělesná váha × podíl + přidaná zátěž) × OPAK. Tělesná váha je poslední měření
-// z listu Tělo do data tréninku, před prvním měřením platí první měření.
+// Objem jedné série: KG × J × OPAK., u cviků na stranu × 2, u vlastní váhy
+// (tělesná váha × podíl + KG × J) × OPAK. J = 2 u cviků s Jednoručky = 2 (v KG je váha
+// jedné jednoručky), jinak 1. Tělesná váha je poslední měření z listu Tělo do data
+// tréninku, před prvním měřením platí první měření. Stejná pravidla má setVolume v js/model.js.
 function volumeFormula_(ss) {
+  return volumeFormulaFor_((sheet) => headerIndex_(ss.getSheetByName(sheet)));
+}
+
+// headers(list) vrátí { záhlaví: index sloupce od 0 }
+function volumeFormulaFor_(headers) {
+  const cache = {};
+  const letterOf = (sheet, header) => {
+    if (!cache[sheet]) cache[sheet] = headers(sheet);
+    const i = cache[sheet][header];
+    if (i === undefined) throw new Error('V listu ' + sheet + ' chybí sloupec ' + header);
+    return columnLetter_(i + 1);
+  };
   // Odkaz na celý sloupec podle záhlaví, např. 'Tělo'!$B$2:$B
   const col = (sheet, header) => {
-    const letter = columnLetter_(headerIndex_(ss.getSheetByName(sheet))[header] + 1);
+    const letter = letterOf(sheet, header);
     return "'" + sheet + "'!$" + letter + '$2:$' + letter;
   };
   const cvName = col('Cviky', 'Název');
@@ -104,33 +125,41 @@ function volumeFormula_(ss) {
   // Počítá jen po poslední řádek s ID, jinak by prázdné výsledky zabraly celý list
   // a nové série by se přidávaly až za ně. Jména parametrů LAMBDA nesmí být R ani C.
   const se = (h) => {
-    const letter = columnLetter_(headerIndex_(ss.getSheetByName('Série'))[h] + 1);
+    const letter = letterOf('Série', h);
     // INDEX(...; 2):INDEX(...; last) místo B2:..., aby vzorec přežil smazání řádku 2
     const whole = "'Série'!" + letter + ':' + letter;
     return 'INDEX(' + whole + ', 2):INDEX(' + whole + ', last)';
   };
-  const idCol = columnLetter_(headerIndex_(ss.getSheetByName('Série'))['ID'] + 1);
+  const idCol = letterOf('Série', 'ID');
   return '={"Objem"; LET(last, MAX(2, IFNA(XMATCH("?*", \'Série\'!' + idCol + ':' + idCol + ', 2, -1), 2)), MAP(' +
     ['Trénink', 'Cvik', 'KG', 'OPAK.'].map(se).join(', ') +
     ', LAMBDA(wid, ex, kg, reps, IF(OR(wid = "", ex = "", reps = ""), "", LET(' +
     'mode, XLOOKUP(ex, ' + cvName + ', ' + col('Cviky', 'Zápis') + ', "váha × opakování"), ' +
     'share, N(XLOOKUP(ex, ' + cvName + ', ' + col('Cviky', 'Podíl tělesné váhy') + ', 0)), ' +
+    'jj, IF(XLOOKUP(ex, ' + cvName + ', ' + col('Cviky', 'Jednoručky') + ', "") & "" = "2", 2, 1), ' +
     'day, XLOOKUP(wid, ' + col('Tréninky', 'ID') + ', ' + col('Tréninky', 'Datum') + ', 0), ' +
     'body, IF(share = 0, 0, XLOOKUP(day, ' + bodyDate + ', ' + bodyKg + ', ' +
     'XLOOKUP(MIN(' + bodyDate + '), ' + bodyDate + ', ' + bodyKg + ', 0), -1)), ' +
-    'IFS(mode = "na stranu", N(kg) * reps * 2, ' +
-    'mode = "vlastní váha", (body * share + N(kg)) * reps, ' +
+    'IFS(mode = "na stranu", N(kg) * jj * reps * 2, ' +
+    'mode = "vlastní váha", (body * share + N(kg) * jj) * reps, ' +
     'OR(mode = "čas", mode = "čas na stranu", mode = "vzdálenost a čas"), 0, ' +
-    'TRUE, N(kg) * reps))))))}';
+    'TRUE, N(kg) * jj * reps))))))}';
 }
 
-// Vzorec se zapíše, když chybí nebo hlásí chybu. Česká tabulka může chtít středníky
-// místo čárek, proto se při chybě zkusí ještě varianta se středníky.
+// Stejný vzorec bez ohledu na mezery a oddělovač (čárka / středník)
+function sameFormula_(a, b) {
+  const norm = (f) => String(f || '').replace(/;/g, ',').replace(/\s+/g, '').toUpperCase();
+  return norm(a) === norm(b);
+}
+
+// Vzorec se zapíše, když chybí, hlásí chybu nebo je jiný než aktuální verze (třeba bez
+// násobku Jednoručky). Česká tabulka může chtít středníky místo čárek, proto se při
+// chybě zkusí ještě varianta se středníky.
 function ensureVolumeFormula_(sh, log) {
   const idx = headerIndex_(sh)['Objem'];
   const cell = sh.getRange(1, idx + 1);
-  if (cell.getFormula() && cell.getDisplayValue() === 'Objem') return;
   const formula = volumeFormula_(sh.getParent());
+  if (cell.getDisplayValue() === 'Objem' && sameFormula_(cell.getFormula(), formula)) return;
   cell.setFormula(formula);
   SpreadsheetApp.flush();
   if (cell.getDisplayValue() !== 'Objem') {
@@ -170,7 +199,7 @@ function selfTest() {
     workout: { id: id, date: Utilities.formatDate(now, TZ, 'yyyy-MM-dd'), start: now.toISOString(), end: now.toISOString(), routine: 'Test', note: 'zkušební trénink, smaže se' },
     sets: [
       { id: id + '-1', exercise: 'Squat (Barbell)', order: 1, type: 'normální', kg: 100, reps: 10, confirmedAt: now.toISOString() },
-      { id: id + '-2', exercise: 'Bulgarian Split Squat (Dumbbell)', order: 2, type: 'normální', kg: 40, reps: 10, confirmedAt: now.toISOString() },
+      { id: id + '-2', exercise: 'Bulgarian Split Squat (Dumbbell)', order: 2, type: 'normální', kg: 20, reps: 10, confirmedAt: now.toISOString() },
       { id: id + '-3', exercise: 'Pull Up', order: 3, type: 'normální', reps: 10, confirmedAt: now.toISOString() },
       { id: id + '-4', exercise: 'Rowing Machine', order: 4, type: 'normální', km: 2, time: '9:12', confirmedAt: now.toISOString() },
     ],
@@ -182,7 +211,7 @@ function selfTest() {
     workout: { id: id, date: Utilities.formatDate(now, TZ, 'yyyy-MM-dd'), start: now.toISOString(), routine: 'Test' },
     sets: [
       { id: id + '-1', exercise: 'Squat (Barbell)', order: 1, type: 'normální', kg: 105, reps: 10 },
-      { id: id + '-2', exercise: 'Bulgarian Split Squat (Dumbbell)', order: 2, type: 'normální', kg: 40, reps: 10 },
+      { id: id + '-2', exercise: 'Bulgarian Split Squat (Dumbbell)', order: 2, type: 'normální', kg: 20, reps: 10 },
       { id: id + '-3', exercise: 'Pull Up', order: 3, type: 'normální', reps: 10 },
       { id: id + '-4', exercise: 'Rowing Machine', order: 4, type: 'normální', km: 2, time: '9:12' },
     ],
@@ -193,7 +222,7 @@ function selfTest() {
     sets: [
       { id: id + '-1', exercise: 'Squat (Barbell)', order: 1, type: 'normální', kg: 105, reps: 10 },
       { id: id + '-1', exercise: 'Squat (Barbell)', order: 1, type: 'normální', kg: 105, reps: 10 },
-      { id: id + '-2', exercise: 'Bulgarian Split Squat (Dumbbell)', order: 2, type: 'normální', kg: 40, reps: 10 },
+      { id: id + '-2', exercise: 'Bulgarian Split Squat (Dumbbell)', order: 2, type: 'normální', kg: 20, reps: 10 },
       { id: id + '-3', exercise: 'Pull Up', order: 3, type: 'normální', reps: 10 },
     ],
   });
@@ -206,7 +235,7 @@ function selfTest() {
     check(res2.updated === 4 && res2.added === 0 && res2.removed === 0) + ' přepsání: ' + JSON.stringify(res2),
     check(res3.updated === 3 && res3.added === 0 && res3.removed === 1) + ' bez vesla a s duplicitou: ' + JSON.stringify(res3),
     check(data.length === 3) + ' řádků v Sérii: ' + data.length + ' (mají být 3)',
-    'objemy po prvním uložení: ' + vol(first) + ' (čekám 1000, 800, tělesná váha × 10, prázdné a čas 9:12)',
+    'objemy po prvním uložení: ' + vol(first) + ' (čekám 1000, 800 = 20 × 2 jednoručky × 10 × 2 strany, tělesná váha × 10, prázdné a čas 9:12)',
     'objemy na konci: ' + vol(data) + ' (čekám 1050, 800, tělesná váha × 10)',
   ];
   deleteWorkout_({ id: id });

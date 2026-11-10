@@ -24,7 +24,7 @@ const SEED_EXERCISES = [
     howto: ['Start ve stoje, osa v rukou na šířku ramen', 'Kolena lehce pokrčená, pohyb vychází z kyčlí, zadek jde dozadu', 'Osa klouže těsně po stehnech, záda rovná', 'Dolů jen tak hluboko, dokud cítíš tah v zadní straně stehen', 'Nahoru zatnutím hýždí, bez záklonu'],
   },
   {
-    name: 'Bulgarian Split Squat (Dumbbell)', cz: 'bulharský dřep', mode: 'na stranu',
+    name: 'Bulgarian Split Squat (Dumbbell)', cz: 'bulharský dřep', mode: 'na stranu', dumbbells: 2,
     primary: 'quadriceps, gluteal', secondary: 'adductors, hamstring, calves', bwFactor: 0,
     howto: ['Zadní noha nártem na lavici, přední asi dva kroky před ní', 'Jednoručky v rukou podél těla, trup mírně v předklonu', 'Dolů svisle, dokud zadní koleno skoro nedosedne', 'Přední koleno ve směru špičky, tlak přes patu', 'Odcvič všechna opakování na jednu nohu, pak vyměň'],
   },
@@ -34,7 +34,7 @@ const SEED_EXERCISES = [
     howto: ['Lopatky opřené o lavici, osa v ohbí kyčlí (s podložkou)', 'Chodidla na šířku pánve, holeně nahoře svisle', 'Zvedni pánev, až je trup se stehny v jedné rovině', 'Nahoře krátká pauza a zatnout hýždě, žebra dole, bez prohnutí', 'Pomalu dolů'],
   },
   {
-    name: 'Single Leg Standing Calf Raise (Dumbbell)', cz: 'jednonožné výpony ve stoje', mode: 'na stranu',
+    name: 'Single Leg Standing Calf Raise (Dumbbell)', cz: 'jednonožné výpony ve stoje', mode: 'na stranu', dumbbells: 1,
     primary: 'calves', secondary: '', bwFactor: 0,
     howto: ['Špička na vyvýšeném okraji, pata volně dole', 'Jednoručka v ruce na straně cvičící nohy, druhou rukou se přidržuj', 'Noha propnutá v koleni', 'Nahoru co nejvýš, dolů pomalu a dole krátká pauza', 'Váha jedné jednoručky, 0 = bez váhy'],
   },
@@ -74,9 +74,9 @@ const SEED_EXERCISES = [
     howto: ['Lavice skloněná asi 30°', 'Lopatky stažené, chodidla na zemi', 'Osa dolů pod klíční kosti', 'Tlak nahoru a mírně dozadu nad ramena'],
   },
   {
-    name: 'Shoulder Press (Dumbbell)', cz: 'tlak na ramena s jednoručkami', mode: 'váha × opakování',
+    name: 'Shoulder Press (Dumbbell)', cz: 'tlak na ramena s jednoručkami', mode: 'váha × opakování', dumbbells: 2,
     primary: 'deltoids', secondary: 'triceps, trapezius', bwFactor: 0,
-    howto: ['Vsedě s opřenými zády, jednoručky ve výšce uší', 'Břicho zpevněné, bez prohnutí v bedrech', 'Tlak nahoru, jednoručky se nahoře skoro dotknou', 'Dolů pomalu do výšky uší', 'Váha je součet obou jednoruček'],
+    howto: ['Vsedě s opřenými zády, jednoručky ve výšce uší', 'Břicho zpevněné, bez prohnutí v bedrech', 'Tlak nahoru, jednoručky se nahoře skoro dotknou', 'Dolů pomalu do výšky uší', 'Zapisuje se váha jedné jednoručky'],
   },
   {
     name: 'Bent Over Row (Barbell)', cz: 'přítah s osou v předklonu', mode: 'váha × opakování',
@@ -84,14 +84,14 @@ const SEED_EXERCISES = [
     howto: ['Předklon asi 45°, záda rovná, kolena lehce pokrčená', 'Osa v natažených pažích pod rameny', 'Přitáhni osu k pupku, lokty podél těla', 'Nahoře stáhni lopatky, dolů kontrolovaně', 'Trup se nehýbe, bez švihu'],
   },
   {
-    name: 'Single Leg Romanian Deadlift (Dumbbell)', cz: 'jednonožný RDL s jednoručkou', mode: 'na stranu',
+    name: 'Single Leg Romanian Deadlift (Dumbbell)', cz: 'jednonožný RDL s jednoručkou', mode: 'na stranu', dumbbells: 1,
     primary: 'hamstring, gluteal', secondary: 'lower-back, adductors, calves', bwFactor: 0,
     howto: ['Stoj na jedné noze, koleno lehce pokrčené', 'Jednoručka v opačné ruce, než je stojná noha', 'Předklon z kyčle, volná noha jde dozadu v jedné linii s trupem', 'Pánev zůstává rovně, nenatáčí se', 'Nahoru zatnutím hýždě stojné nohy'],
   },
   {
-    name: 'Dumbbell Step Up', cz: 'step-up na bednu', mode: 'na stranu',
+    name: 'Dumbbell Step Up', cz: 'step-up na bednu', mode: 'na stranu', dumbbells: 2,
     primary: 'quadriceps, gluteal', secondary: 'hamstring, calves', bwFactor: 0,
-    howto: ['Celé chodidlo na bedně, koleno nad kotníkem', 'Vystup silou přední nohy, zadní se jen odlepí', 'Nahoře se narovnej, pak pomalu dolů', 'Odcvič všechna opakování na jednu nohu, pak vyměň', 'Váha je součet jednoruček, 0 = bez váhy'],
+    howto: ['Celé chodidlo na bedně, koleno nad kotníkem', 'Vystup silou přední nohy, zadní se jen odlepí', 'Nahoře se narovnej, pak pomalu dolů', 'Odcvič všechna opakování na jednu nohu, pak vyměň', 'Zapisuje se váha jedné jednoručky, 0 = bez váhy'],
   },
   {
     name: 'Side Plank', cz: 'boční plank', mode: 'čas na stranu',
@@ -134,9 +134,9 @@ const SEED_EXERCISES = [
     howto: ['Hrudník na opěrce, rukojeti ve výšce ramen', 'Lokty lehce pokrčené a pevné', 'Rozpaž do stran, tah jde ze zadních ramen, ne z lopatek', 'Zpátky pomalu'],
   },
   {
-    name: 'Lateral Raise (Dumbbell)', cz: 'upažování s jednoručkami', mode: 'váha × opakování',
+    name: 'Lateral Raise (Dumbbell)', cz: 'upažování s jednoručkami', mode: 'váha × opakování', dumbbells: 2,
     primary: 'deltoids', secondary: 'trapezius', bwFactor: 0,
-    howto: ['Stoj, jednoručky podél těla, lokty lehce pokrčené', 'Upaž do výšky ramen, malíček mírně nahoru', 'Ramena nekrč k uším, bez švihu', 'Dolů pomalu', 'Váha je součet obou jednoruček'],
+    howto: ['Stoj, jednoručky podél těla, lokty lehce pokrčené', 'Upaž do výšky ramen, malíček mírně nahoru', 'Ramena nekrč k uším, bez švihu', 'Dolů pomalu', 'Zapisuje se váha jedné jednoručky'],
   },
   {
     name: 'Leg Press (Machine)', cz: 'leg press', mode: 'váha × opakování',
@@ -165,13 +165,13 @@ const SEED_EXERCISES = [
     howto: ['Nohy zaháknuté, lopatky stažené', 'Osa dolů na spodní okraj hrudníku', 'Lokty asi 45° od těla', 'Tlak nahoru nad hrudník'],
   },
   {
-    name: 'Skullcrusher (Dumbbell)', cz: 'skullcrusher', mode: 'váha × opakování',
+    name: 'Skullcrusher (Dumbbell)', cz: 'skullcrusher', mode: 'váha × opakování', dumbbells: 1,
     primary: 'triceps', secondary: 'forearm', bwFactor: 0,
-    howto: ['Leh na lavici, jednoručky nad rameny', 'Nadloktí zůstávají na místě, pohyb jen v lokti', 'Jednoručky pomalu dolů vedle hlavy', 'Natáhni paže zpět nahoru', 'Váha je součet obou jednoruček'],
+    howto: ['Leh na lavici, jednoručka v obou rukách nad rameny', 'Nadloktí zůstávají na místě, pohyb jen v lokti', 'Jednoručku pomalu dolů za hlavu', 'Natáhni paže zpět nahoru', 'Zapisuje se váha jednoručky'],
   },
   {
-    name: 'Bicep Curl (Dumbbell)', cz: 'bicepsový zdvih s jednoručkami', mode: 'váha × opakování',
+    name: 'Bicep Curl (Dumbbell)', cz: 'bicepsový zdvih s jednoručkami', mode: 'váha × opakování', dumbbells: 2,
     primary: 'biceps', secondary: 'forearm', bwFactor: 0,
-    howto: ['Stoj, jednoručky podél těla, dlaně dopředu', 'Lokty u těla, nepohybují se dopředu', 'Zdvihni k ramenům bez švihu trupem', 'Dolů pomalu do natažených paží', 'Váha je součet obou jednoruček'],
+    howto: ['Stoj, jednoručky podél těla, dlaně dopředu', 'Lokty u těla, nepohybují se dopředu', 'Zdvihni k ramenům bez švihu trupem', 'Dolů pomalu do natažených paží', 'Zapisuje se váha jedné jednoručky'],
   },
 ].map((e) => Object.assign({}, e, { howto: e.howto.map((b) => '• ' + b).join('\n') }));

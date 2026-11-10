@@ -29,18 +29,21 @@ function overviewFormulas_(ref) {
   const NOT_TIME = (m) => '(' + m + ' <> "čas") * (' + m + ' <> "čas na stranu") * (' + m + ' <> "vzdálenost a čas")';
   const DAY = (wid) => 'XLOOKUP(' + wid + ', ' + T('ID') + ', ' + T('Datum') + ', "")';
   const NUM = (x) => 'IF(ISNUMBER(' + x + '), ' + x + ', 0)';
+  // Násobek jednoruček: 2 u cviků s Jednoručky = 2 (v KG je váha jedné), jinak 1
+  const JJ = (ex) => 'IF(XLOOKUP(' + ex + ', ' + CV('Název') + ', ' + CV('Jednoručky') + ', "") & "" = "2", 2, 1)';
 
   const f = {};
 
   // Série posledního tréninku (podle začátku, bez něj podle data). Nahoře datum, rutina a poznámka.
+  // KG tak, jak je zapsané; ČAS P a Jednoručky jsou na konci, ať se starší sloupce neposunou.
   f['Poslední trénink'] = '=ARRAYFORMULA(LET(' +
     'tid, ' + T('ID') + ', tdate, ' + T('Datum') + ', tstart, ' + T('Začátek') + ', ' +
     'key, IF(tid = "", -1, IF(ISNUMBER(tstart), tstart, IF(ISNUMBER(tdate), tdate, 0))), ' +
     'last, XLOOKUP(MAX(key), key, tid), ' +
     'wid, ' + S('Trénink') + ', mine, wid = last, ' +
-    'picked, FILTER(HSTACK(' + ['Cvik', 'Pořadí', 'Superset', 'Typ', 'KG', 'OPAK.', 'ČAS', 'KM', 'V záloze', 'Poznámka ke cviku'].map(S).join(', ') +
-    ', ROW(wid)), mine), ' +
-    'sorted, CHOOSECOLS(SORT(picked, 2, TRUE, 11, TRUE), SEQUENCE(1, 10)), ' +
+    'picked, FILTER(HSTACK(' + ['Cvik', 'Pořadí', 'Superset', 'Typ', 'KG', 'OPAK.', 'ČAS', 'KM', 'V záloze', 'Poznámka ke cviku', 'ČAS P'].map(S).join(', ') +
+    ', XLOOKUP(' + S('Cvik') + ', ' + CV('Název') + ', ' + CV('Jednoručky') + ', "") & "", ROW(wid)), mine), ' +
+    'sorted, CHOOSECOLS(SORT(picked, 2, TRUE, 13, TRUE), SEQUENCE(1, 12)), ' +
     'vol, SUM(' + NUM(S('Objem')) + ' * mine), ' +
     'working, SUM(mine * (' + S('Typ') + ' <> "rozcvička")), ' +
     'day, XLOOKUP(last, tid, tdate, ""), ' +
@@ -53,10 +56,11 @@ function overviewFormulas_(ref) {
     'HSTACK("Objem kg", ROUND(vol), "Sérií", SUM(--mine), "Pracovních", working), ' +
     'HSTACK("Poznámka", XLOOKUP(last, tid, ' + T('Poznámka') + ', "") & ""), ' +
     '"", ' +
-    'HSTACK("Cvik", "Pořadí", "Superset", "Typ", "KG", "OPAK.", "ČAS", "KM", "V záloze", "Poznámka ke cviku"), ' +
+    'HSTACK("Cvik", "Pořadí", "Superset", "Typ", "KG", "OPAK.", "ČAS", "KM", "V záloze", "Poznámka ke cviku", "ČAS P", "Jednoručky"), ' +
     'sorted), "")))';
 
   // Souhrn po cvicích za posledních 7 dní (dnes a 6 dní zpět), nahoře součet.
+  // Nejtěžší série jako součet KG × J (dvě jednoručky po 20 = 40 kg).
   f['Tento týden'] = '=ARRAYFORMULA(LET(' +
     'wid, ' + S('Trénink') + ', day, ' + DAY('wid') + ', ' +
     'recent, (wid <> "") * ISNUMBER(day) * (day >= TODAY() - 6) * (day <= TODAY()), ' +
@@ -64,7 +68,7 @@ function overviewFormulas_(ref) {
     'head, HSTACK("Od", TEXT(from, "d. M. yyyy"), "Do", TEXT(TODAY(), "d. M. yyyy")), ' +
     'IF(SUM(recent) = 0, IFNA(VSTACK(head, "Za posledních 7 dní žádný trénink"), ""), LET(' +
     'w, FILTER(wid, recent), e, FILTER(' + S('Cvik') + ', recent), t, FILTER(' + S('Typ') + ', recent), ' +
-    'kg, FILTER(' + NUM(S('KG')) + ', recent), reps, FILTER(' + S('OPAK.') + ', recent), ' +
+    'kg, FILTER(' + NUM(S('KG')) + ' * ' + JJ(S('Cvik')) + ', recent), reps, FILTER(' + S('OPAK.') + ', recent), ' +
     'tm, FILTER(' + S('ČAS') + ' & "", recent), km, FILTER(' + S('KM') + ', recent), ' +
     'vol, FILTER(' + NUM(S('Objem')) + ', recent), ' +
     'exs, UNIQUE(e), ' +
@@ -85,7 +89,7 @@ function overviewFormulas_(ref) {
     'best, ' +
     'MAP(exs, LAMBDA(x, ROUND(SUM((e = x) * vol)))))), "")))))';
 
-  // Maximum každého cviku: největší KG, při shodě víc opakování, datum posledního
+  // Maximum každého cviku: největší KG × J (součet obou jednoruček), při shodě víc opakování, datum posledního
   // dosažení (jako detail cviku v appce).
   // Jen pracovní série (bez rozcviček) s vyplněnými opakováními, bez cviků na čas.
   // U vlastní váhy je KG přidaná zátěž, cviky bez váhy tak mají maximum v opakováních.
@@ -93,7 +97,7 @@ function overviewFormulas_(ref) {
     'ex, ' + S('Cvik') + ', reps, ' + S('OPAK.') + ', ' +
     'mode, XLOOKUP(ex, ' + CV('Název') + ', ' + CV('Zápis') + ', "váha × opakování"), ' +
     'ok, (ex <> "") * (' + S('Typ') + ' <> "rozcvička") * ISNUMBER(reps) * (' + NUM('reps') + ' > 0) * ' + NOT_TIME('mode') + ', ' +
-    'data, FILTER(HSTACK(ex, XLOOKUP(ex, ' + CV('Název') + ', ' + CV('Česky') + ', "") & "", ' + NUM(S('KG')) + ', reps, ' +
+    'data, FILTER(HSTACK(ex, XLOOKUP(ex, ' + CV('Název') + ', ' + CV('Česky') + ', "") & "", ' + NUM(S('KG')) + ' * ' + JJ('ex') + ', reps, ' +
     DAY(S('Trénink')) + ', mode), ok = 1), ' +
     'sorted, SORT(data, 1, TRUE, 3, FALSE, 4, FALSE, 5, FALSE), ' +
     'VSTACK(HSTACK("Cvik", "Česky", "KG", "OPAK.", "Datum", "Zápis"), SORTN(sorted, ROWS(sorted), 2, 1, TRUE))))';
@@ -140,14 +144,14 @@ function sheetRef_(ss) {
   };
 }
 
-// Zapíše vzorec do A1, když chybí nebo nedává očekávané záhlaví. Nic jiného v listu nepřepíše,
+// Zapíše vzorec do A1, když chybí, nedává očekávané záhlaví nebo je jiný než aktuální verze. Nic jiného v listu nepřepíše,
 // jen při novém zápisu list vyčistí (jsou v něm jen výsledky vzorce).
 function ensureOverviews_(ss, log) {
   const formulas = overviewFormulas_(sheetRef_(ss));
   Object.keys(formulas).forEach((name) => {
     const sh = ss.getSheetByName(name);
     const cell = sh.getRange('A1');
-    if (cell.getFormula() && cell.getDisplayValue() === OVERVIEW_A1[name]) return;
+    if (cell.getDisplayValue() === OVERVIEW_A1[name] && sameFormula_(cell.getFormula(), formulas[name])) return;
     sh.clear();
     cell.setFormula(formulas[name]);
     SpreadsheetApp.flush();

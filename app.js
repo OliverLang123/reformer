@@ -1,19 +1,20 @@
 import { html, render, useState, useEffect, useMemo, useRef } from './vendor/htm-preact.module.js';
-import { fmtNum, fmtInt, fmtTime, fmtDuration, fmtDate, norm, plural, parseTimeInput, typeTime } from './js/util.js';
+import { fmtNum, fmtInt, fmtTime, fmtDuration, fmtDate, norm, plural, parseTimeInput, typeTime, localDate } from './js/util.js';
 import {
   getConfig, setConfig, getActive, setActive as storeActive, call, loadCachedData, refreshData,
   getQueue, queueStatus, onQueueChange, enqueueSave, enqueueDelete, flushQueue, updateCachedExercise,
 } from './js/store.js';
 import {
   MODE, buildModel, exerciseInfo, routineList, orderRoutines, previousSession, previousFor,
-  fieldsFor, fmtSet, historyBest,
+  fieldsFor, fmtSet, historyBest, isTimeMode, isTimeField, isWatchMode, dumbbellFactor,
+  entryLine, setCalc, fmtBest, setVolume, bodyWeightOn,
 } from './js/model.js';
 import * as W from './js/workout.js';
 import { buildSummary } from './js/summary.js';
 import { renderImage, shareImage, copyText } from './js/strava.js';
 import { fileId, mediaUrl, prefetchMedia, uploadVideo, uploadPhoto, photoFromSavedVideo } from './js/media.js';
 
-export const VERSION = '0.5.1';
+export const VERSION = '0.6.0';
 
 // ---------- zvuk, displej, čas ----------
 
@@ -199,17 +200,43 @@ function Home({ model, active, qs, onStart, onResume, onSettings, onOpen, onHist
 const TYPE_LABEL = { W: 'W', F: 'F', D: 'D' };
 const REST_OPTIONS = [0, 30, 45, 60, 75, 90, 120, 150, 180, 240, 300];
 
-function SetRow({ w, ex, set, idx, info, prev, onUpdate, onConfirm, onType }) {
+const has = (v) => v !== null && v !== undefined;
+
+// Stopky v řádku série (cviky na čas): Start, Start L / Start P, běžící čas se Stop a ×
+function WatchCtl({ w, ex, set, info, now, onWatch }) {
+  const watch = w.watch;
+  const mine = watch && watch.setId === set.id;
+  if (mine) {
+    const secs = Math.max(0, Math.floor((now - watch.start) / 1000));
+    const reached = watch.target && secs >= watch.target;
+    return html`<div class=${'watch-ctl running' + (reached ? ' over' : '')}>
+      <strong>${watch.side ? watch.side + ' ' : ''}${fmtTime(secs)}</strong>
+      ${watch.target ? html`<small>cíl ${fmtTime(watch.target)}</small>` : html`<small></small>`}
+      <button class="primary" onClick=${() => onWatch('stop')}>Stop</button>
+      <button class="watch-x" onClick=${() => onWatch('cancel')} aria-label="Zastavit bez zápisu">×</button>
+    </div>`;
+  }
+  const side = info.mode === MODE.TIME_SIDE ? (set.watchSide || 'L') : '';
+  return html`<div class="watch-ctl">
+    <button disabled=${!!watch} onClick=${() => onWatch('start', ex.key, set.id)}>▶ Start${side ? ' ' + (side === 'L' ? 'L' : 'P') : ''}</button>
+    ${side === 'R' && set.input.time && html`<small>L ${set.input.time}</small>`}
+  </div>`;
+}
+
+function SetRow({ w, ex, set, idx, info, prev, bw, now, onUpdate, onConfirm, onType, onWatch }) {
   const fields = fieldsFor(info.mode);
   const num = ex.sets.filter((s) => s.type !== 'W').indexOf(set) + 1;
   const placeholder = (f) => {
     const t = set.target || {};
     if (f === 'reps' && t.reps) return t.reps.text;
-    const v = t[f] !== undefined && t[f] !== null ? t[f] : prev ? prev[f] : null;
-    if (v === null || v === undefined) return f === 'kg' && info.mode === MODE.BODY ? '+0' : '';
-    return f === 'time' ? fmtTime(v) : fmtNum(v);
+    let v = has(t[f]) ? t[f] : prev && has(prev[f]) ? prev[f] : null;
+    if (f === 'timeR' && !has(v)) v = has(t.time) ? t.time : prev && has(prev.time) ? prev.time : null;
+    if (!has(v)) return f === 'kg' && info.mode === MODE.BODY ? '+0' : '';
+    return isTimeField(f) ? fmtTime(v) : fmtNum(v);
   };
-  const mode = { kg: 'decimal', km: 'decimal', reps: 'numeric', time: 'numeric' };
+  const mode = { kg: 'decimal', km: 'decimal', reps: 'numeric', time: 'numeric', timeR: 'numeric' };
+  const calc = set.done ? setCalc(W.setValues(set), info, bw) : '';
+  const watchable = isWatchMode(info.mode) && !set.done && !w.edit;
   return html`<div class=${'set-row' + (set.done ? ' done' : '')}>
     <button class=${'set-num t-' + set.type} onClick=${onType}>${TYPE_LABEL[set.type] || num}</button>
     <button class="prev" disabled=${!prev} onClick=${() => {
@@ -218,16 +245,16 @@ function SetRow({ w, ex, set, idx, info, prev, onUpdate, onConfirm, onType }) {
         let n = cur;
         fields.forEach((f) => {
           const v = prev[f];
-          n = W.updateInput(n, ex.key, set.id, f, v === null || v === undefined ? '' : f === 'time' ? fmtTime(v) : fmtNum(v));
+          n = W.updateInput(n, ex.key, set.id, f, !has(v) ? '' : isTimeField(f) ? fmtTime(v) : fmtNum(v));
         });
         return n;
       }, false);
     }}>${prev ? fmtSet(prev, info.mode).replace(/ × /g, '×').replace(' km', 'km') : '-'}</button>
     ${fields.map((f) => html`<input class=${'val f-' + f} type="text" inputmode=${mode[f]} enterkeyhint="done"
-      value=${set.input[f]} placeholder=${placeholder(f)}
-      onInput=${(e) => onUpdate((cur) => W.updateInput(cur, ex.key, set.id, f, f === 'time' ? typeTime(e.target.value) : e.target.value), false)}
+      value=${set.input[f] || ''} placeholder=${placeholder(f)}
+      onInput=${(e) => onUpdate((cur) => W.updateInput(cur, ex.key, set.id, f, isTimeField(f) ? typeTime(e.target.value) : e.target.value), false)}
       onBlur=${(e) => {
-        if (f === 'time' && e.target.value) {
+        if (isTimeField(f) && e.target.value) {
           const s = parseTimeInput(e.target.value);
           if (s !== null) onUpdate((cur) => W.updateInput(cur, ex.key, set.id, f, fmtTime(s)), false);
         }
@@ -235,16 +262,23 @@ function SetRow({ w, ex, set, idx, info, prev, onUpdate, onConfirm, onType }) {
     ${fields.length === 1 && html`<span></span>`}
     <button class=${'check' + (set.done ? ' on' : '')} onClick=${onConfirm} aria-label="Potvrdit sérii">${set.pr ? '🏆' : '✓'}</button>
     <button class="del" onClick=${() => onUpdate((cur) => W.deleteSet(cur, ex.key, set.id), set.done)} aria-label="Smazat sérii">✕</button>
-  </div>`;
+  </div>
+  ${watchable && html`<${WatchCtl} w=${w} ex=${ex} set=${set} info=${info} now=${now} onWatch=${onWatch} />`}
+  ${calc && html`<div class="set-calc">${calc}</div>`}`;
 }
 
-function ExerciseCard({ w, ex, model, onUpdate, onMenu, onDetail, onRest, onType, toast }) {
+function ExerciseCard({ w, ex, model, now, onUpdate, onMenu, onDetail, onRest, onType, onWatch, toast }) {
   const info = exerciseInfo(model, ex.name);
   const photo = useMedia(info.photo);
   const clip = useMedia(info.photo ? null : info.video);
   const prevSes = previousSession(model, ex.name, w.id, w.edit ? w.start : null);
   const fields = fieldsFor(info.mode);
-  const head = { kg: info.mode === MODE.BODY ? '+KG' : 'KG', reps: 'OPAK.', time: 'ČAS', km: 'KM' };
+  const bw = bodyWeightOn(model, localDate(new Date(w.start)));
+  const kgHead = info.mode === MODE.BODY ? '+KG' : dumbbellFactor(info) === 2 ? 'KG (1 ks)' : 'KG';
+  const side = info.mode === MODE.TIME_SIDE;
+  const head = { kg: kgHead, reps: 'OPAK.', time: side ? 'ČAS L' : 'ČAS', timeR: 'ČAS P', km: 'KM' };
+  const done = ex.sets.filter((s) => s.done);
+  const total = done.reduce((a, s) => a + setVolume(W.setValues(s), info, bw), 0);
   const pinned = [info.coach, ex.routineNote].filter(Boolean).join(' · ');
   const [noteOpen, setNoteOpen] = useState(!!ex.note);
 
@@ -271,6 +305,7 @@ function ExerciseCard({ w, ex, model, onUpdate, onMenu, onDetail, onRest, onType
       </button>
       <button class="icon" onClick=${() => onMenu(ex.key)} aria-label="Menu cviku">⋮</button>
     </div>
+    <p class="entry">${entryLine(info, bw)}</p>
     ${ex.superset && html`<span class="ss-tag">Superset ${ex.superset}</span>`}
     ${pinned && html`<p class="pinned">📌 ${pinned}</p>`}
     ${noteOpen && html`<textarea class="note" rows="1" placeholder="Poznámka ke cviku" value=${ex.note}
@@ -283,10 +318,11 @@ function ExerciseCard({ w, ex, model, onUpdate, onMenu, onDetail, onRest, onType
     <div class=${'set-row head' + (fields.length === 1 ? ' one' : '')}>
       <span>SÉRIE</span><span>MINULE</span>${fields.map((f) => html`<span>${head[f]}</span>`)}${fields.length === 1 && html`<span></span>`}<span>✓</span><span></span>
     </div>
-    ${ex.sets.map((s, i) => html`<${SetRow} key=${s.id} w=${w} ex=${ex} set=${s} idx=${i} info=${info}
+    ${ex.sets.map((s, i) => html`<${SetRow} key=${s.id} w=${w} ex=${ex} set=${s} idx=${i} info=${info} bw=${bw} now=${now}
       prev=${previousFor(prevSes, s, ex.sets)}
-      onUpdate=${onUpdate} onConfirm=${() => confirm(s)} onType=${() => onType(ex.key, s.id)} />`)}
+      onUpdate=${onUpdate} onConfirm=${() => confirm(s)} onType=${() => onType(ex.key, s.id)} onWatch=${onWatch} />`)}
     <button class="add-set" onClick=${() => onUpdate((cur) => W.addSet(cur, ex.key), false)}>+ Přidat sérii</button>
+    ${done.length > 0 && !isTimeMode(info.mode) && html`<p class="ex-total">Cvik celkem: ${fmtInt(total)} kg</p>`}
   </section>`;
 }
 
@@ -312,6 +348,31 @@ function RestBar({ w, onUpdate, now }) {
     <strong>${over ? 'Odpočinek skončil' : fmtTime(left)}</strong>
     <button onClick=${() => shift(15)}>+15 s</button>
     <button class="primary" onClick=${() => onUpdate((cur) => W.patch(cur, (n) => { n.restEnd = null; }), false)}>${over ? 'OK' : 'Přeskočit'}</button>
+  </div>`;
+}
+
+// Běžící stopky velké v dolní liště (stejné místo jako odpočinek). Pípnutí při dosažení cíle,
+// jen když je appka otevřená; po odemčení zůstane zvýraznění „Cíl splněn“.
+function WatchBar({ w, now, onWatch }) {
+  const beeped = useRef(null);
+  const watch = w.watch;
+  if (!watch) return null;
+  const ex = w.exercises.find((e) => e.key === watch.exKey);
+  const secs = Math.max(0, Math.floor((Math.max(now, Date.now()) - watch.start) / 1000));
+  const reached = !!watch.target && secs >= watch.target;
+  if (reached && beeped.current !== watch.start) {
+    beeped.current = watch.start;
+    if (secs - watch.target < 3) beep();
+  }
+  const side = watch.side === 'L' ? ' · levá' : watch.side === 'R' ? ' · pravá' : '';
+  return html`<div class=${'rest-bar watch-bar' + (reached ? ' over' : '')}>
+    <button class="watch-x" onClick=${() => onWatch('cancel')} aria-label="Zastavit bez zápisu">×</button>
+    <div class="watch-mid">
+      <small>${ex ? ex.name : 'Stopky'}${side}${watch.target ? ' · cíl ' + fmtTime(watch.target) : ''}</small>
+      <strong>${fmtTime(secs)}</strong>
+      ${reached && html`<small>Cíl splněn</small>`}
+    </div>
+    <button class="primary" onClick=${() => onWatch('stop')}>Stop</button>
   </div>`;
 }
 
@@ -395,8 +456,9 @@ function ExerciseMedia({ info, onMedia }) {
   </div>`;
 }
 
-function ExerciseDetail({ model, name, onClose, onMedia }) {
+function ExerciseDetail({ model, name, onClose, onMedia, date }) {
   const info = exerciseInfo(model, name);
+  const bw = bodyWeightOn(model, date || localDate());
   const best = historyBest(model, name, info.mode, null);
   let bestDate = '';
   if (best) {
@@ -409,11 +471,12 @@ function ExerciseDetail({ model, name, onClose, onMedia }) {
   return html`<${Sheet} onClose=${onClose} full>
     <div class="sheet-head"><strong>${info.name}</strong><button class="link" onClick=${onClose}>Zavřít</button></div>
     ${info.cz && html`<p class="muted">${info.cz}</p>`}
+    <p class="entry">${entryLine(info, bw)}</p>
     <${ExerciseMedia} info=${info} onMedia=${onMedia} />
     ${info.coach && html`<p class="pinned">📌 ${info.coach}</p>`}
     ${info.howto.length > 0 && html`<h3>Provedení</h3><ul class="howto">${info.howto.map((b) => html`<li>${b}</li>`)}</ul>`}
     ${(info.primary.length > 0 || info.secondary.length > 0) && html`<p class="muted">Partie: ${info.primary.join(', ')}${info.secondary.length ? ' · vedlejší: ' + info.secondary.join(', ') : ''}</p>`}
-    ${best && html`<h3>Maximum</h3><p>${fmtSet(best, info.mode)}${bestDate ? ', ' + bestDate : ''}</p>`}
+    ${best && html`<h3>Maximum</h3><p>${fmtBest(best, info)}${bestDate ? ', ' + bestDate : ''}</p>`}
     ${sessions.length > 0 && html`<h3>Historie</h3><ul class="history">
       ${sessions.map((s) => html`<li><span>${fmtDate(s.date)}</span><span>${s.sets.map((x) => fmtSet(x, info.mode)).join(', ')}</span></li>`)}
     </ul>
@@ -442,6 +505,22 @@ function Workout({ model, w, qs, onUpdate, onFinish, onDiscard, onHome, onMedia 
     if (done) onFinish();
   }, [Math.floor(now / 60000)]);
 
+  // Stopky: start (ukončí odpočinek), stop (zapíše čas, případně potvrdí sérii), × bez zápisu
+  function onWatch(action, exKey, setId) {
+    if (action === 'start') {
+      unlockAudio();
+      onUpdate((cur) => W.startWatch(cur, exKey, setId, model), false);
+    } else if (action === 'stop') {
+      onUpdate((cur) => {
+        const r = W.stopWatch(cur, model);
+        if (r.error) toast(r.error);
+        return r.workout;
+      }, true);
+    } else {
+      onUpdate((cur) => W.cancelWatch(cur), false);
+    }
+  }
+
   const menuEx = menu && w.exercises.find((e) => e.key === menu);
   const typeSet = typeFor && w.exercises.find((e) => e.key === typeFor.exKey)?.sets.find((s) => s.id === typeFor.setId);
 
@@ -463,8 +542,8 @@ function Workout({ model, w, qs, onUpdate, onFinish, onDiscard, onHome, onMedia 
       <input class="title-input" value=${w.title} onInput=${(e) => onUpdate((cur) => W.patch(cur, (n) => { n.title = e.target.value; }), false)} />
     </div>
     ${w.routineNote && html`<p class="pinned">📌 ${w.routineNote}</p>`}
-    ${w.exercises.map((ex) => html`<${ExerciseCard} key=${ex.key} w=${w} ex=${ex} model=${model}
-      onUpdate=${onUpdate} onMenu=${setMenu} onDetail=${setDetail} onRest=${setRestFor}
+    ${w.exercises.map((ex) => html`<${ExerciseCard} key=${ex.key} w=${w} ex=${ex} model=${model} now=${now}
+      onUpdate=${onUpdate} onMenu=${setMenu} onDetail=${setDetail} onRest=${setRestFor} onWatch=${onWatch}
       onType=${(exKey, setId) => setTypeFor({ exKey, setId })} toast=${toast} />`)}
     <button class="wide" onClick=${() => setPicker({ mode: 'add' })}>+ Přidat cvik</button>
     ${w.edit ? html`<label class="form">Poznámka k tréninku
@@ -473,7 +552,7 @@ function Workout({ model, w, qs, onUpdate, onFinish, onDiscard, onHome, onMedia 
       : html`<button class="wide danger" onClick=${onDiscard}>Zahodit trénink</button>`}
     <div class="spacer"></div>
 
-    ${!w.edit && html`<${RestBar} w=${w} onUpdate=${onUpdate} now=${now} />`}
+    ${!w.edit && (w.watch ? html`<${WatchBar} w=${w} now=${now} onWatch=${onWatch} />` : html`<${RestBar} w=${w} onUpdate=${onUpdate} now=${now} />`)}
     <${Toast} text=${toastText} />
 
     ${picker && html`<${ExercisePicker} model=${model} title=${picker.mode === 'add' ? 'Přidat cvik' : 'Nahradit cvik'}
@@ -482,7 +561,7 @@ function Workout({ model, w, qs, onUpdate, onFinish, onDiscard, onHome, onMedia 
         onUpdate((cur) => (picker.mode === 'add' ? W.addExercise(cur, name) : W.replaceExercise(cur, picker.key, name)), true);
         setPicker(null);
       }} />`}
-    ${detail && html`<${ExerciseDetail} model=${model} name=${detail} onMedia=${onMedia} onClose=${() => setDetail(null)} />`}
+    ${detail && html`<${ExerciseDetail} model=${model} name=${detail} date=${localDate(new Date(w.start))} onMedia=${onMedia} onClose=${() => setDetail(null)} />`}
     ${menuEx && html`<${Sheet} onClose=${() => setMenu(null)}>
       <div class="sheet-head"><strong>${menuEx.name}</strong></div>
       <div class="menu">
@@ -535,7 +614,7 @@ function Finish({ model, w, onSave, onBack, onDiscard }) {
         <div><small>Objem</small><strong>${fmtInt(st.volume)} kg</strong></div>
         <div><small>Série</small><strong>${st.sets}</strong></div>
       </div>
-      ${st.prs.length > 0 && html`<h3>Nová maxima</h3><ul class="prs">${st.prs.map((p) => html`<li>🏆 ${p.exercise} ${fmtSet(p, p.mode)}</li>`)}</ul>`}
+      ${st.prs.length > 0 && html`<h3>Nová maxima</h3><ul class="prs">${st.prs.map((p) => html`<li>🏆 ${p.exercise} ${fmtBest(p, exerciseInfo(model, p.exercise))}</li>`)}</ul>`}
       ${open > 0 && html`<p class="warn">${open} ${plural(open, 'nepotvrzená série se neuloží', 'nepotvrzené série se neuloží', 'nepotvrzených sérií se neuloží')}.</p>`}
       <label class="form">Poznámka k tréninku
         <textarea rows="3" value=${note} onInput=${(e) => setNote(e.target.value)}></textarea>
@@ -586,7 +665,7 @@ function StravaCard({ s, toast }) {
   </section>`;
 }
 
-function Summary({ s, onDone, toast }) {
+function Summary({ s, model, onDone, toast }) {
   return html`<main>
     <header class="top"><span></span><h1 class="small">Hotovo</h1><span></span></header>
     <section class="card">
@@ -596,7 +675,7 @@ function Summary({ s, onDone, toast }) {
         <div><small>Objem</small><strong>${fmtInt(s.volume)} kg</strong></div>
         <div><small>Série</small><strong>${s.sets}</strong></div>
       </div>
-      ${s.prs.length > 0 && html`<h3>Nová maxima</h3><ul class="prs">${s.prs.map((p) => html`<li>🏆 ${p.exercise} ${fmtSet(p, p.mode)}</li>`)}</ul>`}
+      ${s.prs.length > 0 && html`<h3>Nová maxima</h3><ul class="prs">${s.prs.map((p) => html`<li>🏆 ${p.exercise} ${fmtBest(p, exerciseInfo(model, p.exercise))}</li>`)}</ul>`}
       <p class="muted">Trénink se ukládá do tabulky na pozadí.</p>
     </section>
     ${s.strava && html`<${StravaCard} s=${s.strava} toast=${toast} />`}
@@ -673,6 +752,7 @@ function PastWorkout({ model, id, onBack, onEdit, onDelete, toast }) {
   });
   const time = (iso) => (iso ? new Date(iso).toLocaleTimeString('cs-CZ', { hour: 'numeric', minute: '2-digit' }) : '');
   const typeTag = { W: 'W', F: 'F', D: 'D' };
+  const bw = bodyWeightOn(model, String(w.date).slice(0, 10));
   return html`<main>
     <header class="top"><button class="link" onClick=${onBack}>Zpět</button><h1 class="small">Trénink</h1><span></span></header>
     <section class="card">
@@ -689,7 +769,12 @@ function PastWorkout({ model, id, onBack, onEdit, onDelete, toast }) {
         return html`<div class="past-ex">
           <strong>${g.name}</strong>${g.superset && html` <span class="ss-tag">Superset ${g.superset}</span>`}
           ${g.note && html`<small class="muted">${g.note}</small>`}
-          <ol>${g.sets.map((x) => html`<li>${typeTag[x.type] && html`<b class="tag">${typeTag[x.type]}</b> `}${fmtSet(x, info.mode)}${x.rir !== null ? ` · ${x.rir} v záloze` : ''}</li>`)}</ol>
+          <ol>${g.sets.map((x) => {
+            const calc = setCalc(x, info, bw);
+            return html`<li>${typeTag[x.type] && html`<b class="tag">${typeTag[x.type]}</b> `}${fmtSet(x, info.mode)}${x.rir !== null ? ` · ${x.rir} v záloze` : ''}
+              ${calc && html`<div class="set-calc">${calc}</div>`}</li>`;
+          })}</ol>
+          ${!isTimeMode(info.mode) && html`<p class="ex-total">Cvik celkem: ${fmtInt(g.sets.reduce((a, x) => a + setVolume(x, info, bw), 0))} kg</p>`}
         </div>`;
       })}
       <div class="row-btns">
@@ -858,7 +943,7 @@ function App() {
   } else if (view === 'finish' && active) {
     screen = html`<${Finish} model=${model} w=${active} onSave=${save} onBack=${() => setView('workout')} onDiscard=${discard} />`;
   } else if (view === 'summary' && summary) {
-    screen = html`<${Summary} s=${summary} toast=${toast} onDone=${() => { setSummary(null); setView('home'); refresh(); }} />`;
+    screen = html`<${Summary} s=${summary} model=${model} toast=${toast} onDone=${() => { setSummary(null); setView('home'); refresh(); }} />`;
   } else if (view === 'edit' && editing) {
     screen = html`<${Workout} model=${model} w=${editing} qs=${qs} onUpdate=${updateEdit} onMedia=${onMedia}
       onFinish=${saveEdit} onDiscard=${cancelEdit} onHome=${cancelEdit} />`;

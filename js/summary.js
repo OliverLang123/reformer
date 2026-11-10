@@ -3,7 +3,7 @@
 // Pravidla: SPEC.md, sekce „Po tréninku: souhrn do Stravy“.
 
 import { fmtNum, fmtInt, fmtTime, fmtDuration, plural } from './util.js';
-import { MODE, isTimeMode, exerciseInfo, bestOf, isBetter, setVolume, bodyWeightOn } from './model.js';
+import { MODE, isTimeMode, exerciseInfo, bestOf, isBetter, setVolume, bodyWeightOn, dumbbellFactor, fmtTimes, fmtBest } from './model.js';
 import { BODY, BODY_VIEWBOX } from './body-map.js';
 
 export const ACCENT = '#FF6A2B';
@@ -43,19 +43,17 @@ function setsText(ex) {
   if (mode === MODE.DIST) {
     return sets.map((s) => [s.km !== null ? `${n(s.km)} km` : '', s.time !== null ? fmtTime(s.time) : ''].filter(Boolean).join(' ')).join(', ');
   }
-  if (isTimeMode(mode)) return sets.map((s) => fmtTime(s.time)).join(', ');
+  // čas na stranu: levá/pravá (0:34/0:31)
+  if (isTimeMode(mode)) return sets.map(fmtTimes).join(', ');
   if (sets.every((s) => !s.kg)) {
     const reps = sets.map((s) => s.reps || 0);
     if (reps.every((r) => r === reps[0])) return `${reps.length}×${n(reps[0])}`;
     return reps.map(n).join(', ');
   }
   const plus = mode === MODE.BODY ? '+' : '';
-  return sets.map((s) => (s.kg ? `${plus}${n(s.kg)}×${n(s.reps)}` : n(s.reps))).join(', ');
-}
-
-function prText(ex, s) {
-  if (ex.info.mode === MODE.BODY) return s.kg ? `+${n(s.kg)} kg × ${n(s.reps)}` : `vlastní váha × ${n(s.reps)}`;
-  return `${n(s.kg)} kg × ${n(s.reps)}`;
+  // dvě jednoručky: 2×20×9 (v KG je váha jedné)
+  const two = dumbbellFactor(ex.info) === 2 ? '2×' : '';
+  return sets.map((s) => (s.kg ? `${plus}${two}${n(s.kg)}×${n(s.reps)}` : n(s.reps))).join(', ');
 }
 
 // ---------- výpočet ----------
@@ -99,7 +97,7 @@ export function buildSummary(model, workoutId) {
     lines.push(group.map((ex) => `${ex.name}: ${setsText(ex)}`).join(' · '));
   }
   const prs = exercises.filter((ex) => ex.isPR);
-  prs.forEach((ex) => lines.push(`Nové maximum: ${ex.name} ${prText(ex, ex.top)}`));
+  prs.forEach((ex) => lines.push(`Nové maximum: ${ex.name} ${fmtBest(ex.top, ex.info)}`));
   const total = [`Celkem zvednuto: ${fmtInt(volume)} kg`, `${working} ${plural(working, 'série', 'série', 'sérií')}`];
   if (w.start && w.end) total.push(fmtDuration(new Date(w.end) - new Date(w.start)));
   lines.push(total.join(' · '));
@@ -115,15 +113,17 @@ export function buildSummary(model, workoutId) {
     title = title.charAt(0).toUpperCase() + title.slice(1);
   }
 
+  // Váha na obrázku jako součet (dvě jednoručky po 20 = 40 kg), stejně jako maximum
   const toImageEx = (ex) => {
     const m = ex.name.match(/^(.*?)\s*\(([^)]*)\)\s*$/);
+    const j = dumbbellFactor(ex.info);
     const out = {
       name: m ? m[1] : ex.name,
       equipment: m ? m[2] : '',
-      top: { weightKg: ex.top.kg || 0, reps: ex.top.reps || 0 },
+      top: { weightKg: (ex.top.kg || 0) * j, reps: ex.top.reps || 0 },
       isPR: ex.isPR,
     };
-    if (ex.previous) out.previous = { weightKg: ex.previous.kg || 0, reps: ex.previous.reps || 0 };
+    if (ex.previous) out.previous = { weightKg: (ex.previous.kg || 0) * j, reps: ex.previous.reps || 0 };
     if (ex.info.mode === MODE.BODY) out.bodyweight = true;
     return out;
   };

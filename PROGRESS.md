@@ -15,6 +15,7 @@ Termín: v pondělí 9. 11. 2026 odcvičit Silový trénink A v appce. Nutné js
 | 4 | přehledy ze vzorců: Maxima, Objem po týdnech, Poslední trénink, Tento týden | hotovo |
 | 5 | souhrn do Stravy: název, popis, obrázek Ember se svalovou mapou | hotovo, čeká test na iPhonu |
 | 6 | karty cviků, historie s úpravami, vlastní videa | hotovo, čeká test na iPhonu |
+| 7 | úpravy 1: stopky u cviků na čas, váha jedné jednoručky (sloupec Jednoručky), řádek Zápis a výpočet na kartě cviku, oprava historie | hotovo, čeká test na iPhonu |
 
 ## Technické dohody
 
@@ -141,6 +142,27 @@ Zbývá:
 - 0.5.1 (po prvním testu na iPhonu): video RDL se nahrálo, ale fotka z prvního snímku ne (Safari na iPhonu nedekóduje snímek z videa mimo stránku). Teď se video vloží do stránky, krátce spustí (s časovým limitem) a pak se z něj udělá fotka. Když cvik má video a nemá fotku, karta cviku ji při otevření doplní sama. Do té doby karta v tréninku ukazuje snímek z videa. Ověřeno v Chromu i na iPhonu (4. 11.): u RDL se fotka po otevření karty doplnila a je v kartě tréninku.
 - Úprava tréninku z historie se drží jen v paměti: když se appka během úpravy zavře, změny se ztratí.
 
+## Etapa 7: úpravy 1 (stopky a jednoručky)
+
+Zadání v UPRAVY-1.md (jen lokálně, má přednost před SPEC.md). Verze appky 0.6.0, skript nasazení verze 5 na stejné adrese.
+
+Hotovo (10. 11.):
+- Tabulka: list Cviky má sloupec Jednoručky (K, za Fotkou; 14 cviků 2, 7 cviků 1). Vyplněno dočasným vzorcem podle seznamu názvů a převedeno na hodnoty. Texty v Provedení „Váha je součet ... jednoruček“ u 5 cviků přepsané na „Zapisuje se váha jedné jednoručky“ (Skullcrusher: jedna jednoručka), stejně v `Seed.js`.
+- List Série: sloupec ČAS P vložený před Objem (Objem musí zůstat poslední, `writeWidth_`), formát text. `ensureHeaders_` v `setup` teď nové sloupce vkládá před Objem.
+- Vzorce s násobkem J: Objem (`volumeFormulaFor_`), Maxima (součet KG × J), Tento týden (nejtěžší série jako součet), Poslední trénink (+ ČAS P a Jednoručky na konci záhlaví). Zapsané přes konektor z `tools/overview-formulas.mjs` (nově vypisuje i vzorec Objem). `setup` přepíše vzorec, když se liší od aktuální verze (`sameFormula_`, bez ohledu na mezery a středníky), ne jen když chybí.
+- Appka: `dumbbells` u cviku, `setVolume` × J, maximum s rozpisem („40 kg (2 × 20) × 9“), popis do Stravy „2×20×9“ a „0:34/0:31“, obrázek s váhou jako součtem. Karta cviku: řádek Zápis, „KG (1 ks)“, výpočet pod potvrzenou sérií, Cvik celkem; totéž v detailu tréninku v Historii.
+- Stopky: `w.watch` v rozpracovaném tréninku (čas startu, strana, cíl z rutiny), lišta dole místo odpočinku, Start / Start L / Start P v řádku, Stop zapíše čas a u „čas“ / po pravé straně potvrdí sérii, × bez zápisu, Start ukončí odpočinek. ČAS P se ukládá jako `timeR`.
+- Oprava historie: obecná akce skriptu `fixSetKg` (`apps-script/Fix.js`) a `tools/fix-kg.mjs`; seznam změn je mimo repozitář (osobní váhy) v `../data/`. Páry teď → nově se přiřazují podle hodnoty, protože ID sérií z appky mají náhodnou část a neřadí se podle pořadí.
+- Ověřeno v headless Chromu (Playwright, náhradní API z exportu Hevy s opravou a vymyšlenými tréninky 6. a 10. 11., řízené hodiny): všechny případy z „Jak ověřit“ v appce, včetně stopek (pípnutí v 0:30, Stop L 0:34, Stop P 0:31, uložení ČAS/ČAS P, odpočinek, superset, 20 s „zamčení“, zavření a otevření appky se skutečnými hodinami).
+
+- Oprava historie zapsaná (10. 11., po zkušebním běhu a OK od Olivera): 23 sérií v 7 záznamech, KG / 2, kontrolní čtení všech 23 OK. Klíč zadával Oliver do terminálu (`tools/fix-kg.mjs`).
+- Ověřeno v tabulce po opravě: Objem po týdnech 9. 11. a 2. 11. stejný jako před úpravou, starší týdny vyšší; Maxima Incline Bench Press (Dumbbell) 100 × 7 (9. 3. 2026), Hammer Curl (Dumbbell) 30 × 10 (22. 10. 2026), Skullcrusher (Dumbbell) 15 × 6 (9. 7. 2026); objem série BSS 10. 11. 720, Shoulder Press 6. 11. 650, Calf Raise 240; Tento týden nejtěžší série jako součet.
+
+Zbývá:
+- Oliver na iPhonu po Obnovit data: stopky (Side Plank sám i v supersetu, pípnutí, zamčený telefon, zavření appky), řádek Zápis a výpočet na kartě BSS, popis do Stravy tréninku z 10. 11.
+- Po nasazení přepíše Claude v chatu rutiny v listu Rutiny na váhu jedné jednoručky (Claude Code list Rutiny neupravuje).
+- Appka neumí zakládat nové cviky (jen jméno, doplní se v listu Cviky), proto volba Jednoručky v appce není.
+
 ## Další krok
 
-Etapy 0 až 6 jsou hotové. Zbývají testy na iPhonu (etapy 5 a 6) a pondělní trénink 9. 11.
+Etapy 0 až 7 jsou hotové. Zbývají testy na iPhonu (etapy 5 a 6) a pondělní trénink 9. 11.

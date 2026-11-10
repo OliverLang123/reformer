@@ -1,7 +1,7 @@
 // Výpočty nad daty z tabulky: rutiny, MINULE, maxima, objem, tělesná váha.
 // Stejná pravidla jako vzorec Objem v listu Série (apps-script/Setup.js).
 
-import { parseNum, parseRange, parseTime, fmtNum, fmtTime } from './util.js';
+import { parseNum, parseRange, parseTime, fmtNum, fmtInt, fmtTime } from './util.js';
 
 export const TYPE_FROM_SHEET = { 'normální': 'N', 'rozcvička': 'W', 'do selhání': 'F', 'drop': 'D' };
 export const TYPE_TO_SHEET = { N: 'normální', W: 'rozcvička', F: 'do selhání', D: 'drop' };
@@ -19,14 +19,20 @@ export const MODE = {
 export function fieldsFor(mode) {
   switch (mode) {
     case MODE.BODY: return ['kg', 'reps'];
-    case MODE.TIME:
-    case MODE.TIME_SIDE: return ['time'];
+    case MODE.TIME: return ['time'];
+    case MODE.TIME_SIDE: return ['time', 'timeR'];
     case MODE.DIST: return ['km', 'time'];
     default: return ['kg', 'reps'];
   }
 }
 
 export const isTimeMode = (mode) => mode === MODE.TIME || mode === MODE.TIME_SIDE || mode === MODE.DIST;
+export const isTimeField = (f) => f === 'time' || f === 'timeR';
+// Cviky měřené stopkami (čas na sérii, u „čas na stranu“ každá strana zvlášť)
+export const isWatchMode = (mode) => mode === MODE.TIME || mode === MODE.TIME_SIDE;
+
+// Násobek jednoruček: u Jednoručky = 2 je v KG váha jedné, do výpočtů se počítá dvakrát
+export const dumbbellFactor = (ex) => (ex && ex.dumbbells === 2 ? 2 : 1);
 
 function splitList(s) {
   return String(s || '').split(',').map((x) => x.trim()).filter(Boolean);
@@ -44,6 +50,7 @@ function normExercise(e) {
     coach: e.coach || '',
     video: e.video || '',
     photo: e.photo || '',
+    dumbbells: [1, 2].includes(parseNum(e.dumbbells)) ? parseNum(e.dumbbells) : null,
   };
 }
 
@@ -58,6 +65,7 @@ export function normSet(s) {
     kg: parseNum(s.kg),
     reps: parseNum(s.reps),
     time: parseTime(s.time),
+    timeR: parseTime(s.timeR),
     km: parseNum(s.km),
     rir: parseNum(s.rir),
     exerciseNote: s.exerciseNote || '',
@@ -126,9 +134,11 @@ export function bodyWeightOn(model, date) {
   return w;
 }
 
+// Objem série, stejně jako vzorec Objem v listu Série: KG × J × OPAK., na stranu × 2,
+// u vlastní váhy (tělesná váha × podíl + KG × J) × OPAK.
 export function setVolume(set, ex, bw) {
   const reps = set.reps || 0;
-  const kg = set.kg || 0;
+  const kg = (set.kg || 0) * dumbbellFactor(ex);
   switch (ex.mode) {
     case MODE.SIDE: return kg * reps * 2;
     case MODE.BODY: return (bw * ex.bwFactor + kg) * reps;
@@ -241,8 +251,69 @@ export function historyBest(model, exercise, mode, excludeId) {
 export function fmtSet(s, mode) {
   if (!s) return '';
   if (mode === MODE.DIST) return [s.km !== null ? `${fmtNum(s.km)} km` : '', s.time !== null ? fmtTime(s.time) : ''].filter(Boolean).join(' ');
-  if (isTimeMode(mode)) return s.time !== null ? fmtTime(s.time) : '';
+  if (isTimeMode(mode)) return fmtTimes(s);
   if (mode === MODE.BODY) return s.kg ? `+${fmtNum(s.kg)} × ${fmtNum(s.reps)}` : `${fmtNum(s.reps)}`;
   if (s.kg === null && s.reps === null) return '';
   return `${fmtNum(s.kg || 0)} × ${fmtNum(s.reps)}`;
 }
+
+// Čas série u „čas na stranu“: levá/pravá (0:34/0:31), jinak jen čas
+export function fmtTimes(s) {
+  if (!s || s.time === null || s.time === undefined) return '';
+  return s.timeR !== null && s.timeR !== undefined ? `${fmtTime(s.time)}/${fmtTime(s.timeR)}` : fmtTime(s.time);
+}
+
+// Maximum a nové maximum: váha jako součet, u dvou jednoruček s rozpisem: 40 kg (2 × 20) × 9
+export function fmtBest(s, ex) {
+  if (!s) return '';
+  if (ex.mode === MODE.BODY) {
+    if (!s.kg) return `vlastní váha × ${fmtNum(s.reps)}`;
+    const j = dumbbellFactor(ex);
+    return j === 2 ? `+${fmtNum(s.kg * 2)} kg (2 × ${fmtNum(s.kg)}) × ${fmtNum(s.reps)}` : `+${fmtNum(s.kg)} kg × ${fmtNum(s.reps)}`;
+  }
+  const kg = s.kg || 0;
+  if (dumbbellFactor(ex) === 2 && kg) return `${fmtNum(kg * 2)} kg (2 × ${fmtNum(kg)}) × ${fmtNum(s.reps)}`;
+  return `${fmtNum(kg)} kg × ${fmtNum(s.reps)}`;
+}
+
+// Řádek Zápis na kartě cviku: co se píše do KG a jak se série počítá do celkem zvednuto
+export function entryLine(ex, bw) {
+  switch (ex.mode) {
+    case MODE.TIME_SIDE: return 'Čas, každá strana zvlášť · do součtu se nepočítá';
+    case MODE.TIME: return 'Čas · do součtu se nepočítá';
+    case MODE.DIST: return 'Vzdálenost a čas · do součtu se nepočítá';
+    case MODE.BODY: {
+      const extra = dumbbellFactor(ex) === 2 ? 'přidaná zátěž (váha jedné jednoručky × 2)' : 'přidaná zátěž';
+      if (!ex.bwFactor) return `Jen ${extra}, tělesná váha se nepočítá`;
+      return `Tělesná váha ${fmtNum(bw)} kg × ${fmtNum(ex.bwFactor)} + ${extra}`;
+    }
+    default: {
+      const j = ex.dumbbells;
+      const base = j === 2 ? 'Váha jedné jednoručky' : j === 1 ? 'Váha jednoručky' : 'Celková váha';
+      const parts = [];
+      if (j === 2) parts.push('× 2 jednoručky');
+      if (ex.mode === MODE.SIDE) parts.push('× 2 strany');
+      return parts.length ? `${base} · do součtu ${parts.join(' ')}` : base;
+    }
+  }
+}
+
+// Výpočet pod potvrzenou sérií: „20 × 2 × 9 × 2 = 720 kg“, „(86,3 × 1 + 0) × 10 = 863 kg“.
+// U cviků na čas nic (do součtu se nepočítají).
+export function setCalc(set, ex, bw) {
+  if (isTimeMode(ex.mode) || !set || !set.reps) return '';
+  const j = dumbbellFactor(ex);
+  const kg = set.kg || 0;
+  const vol = fmtNum(setVolume(set, ex, bw));
+  if (ex.mode === MODE.BODY) {
+    const load = j === 2 ? `${fmtNum(kg)} × 2` : fmtNum(kg);
+    return `(${fmtNum(bw)} × ${fmtNum(ex.bwFactor)} + ${load}) × ${fmtNum(set.reps)} = ${vol} kg`;
+  }
+  const parts = [fmtNum(kg)];
+  if (j === 2) parts.push('2');
+  parts.push(fmtNum(set.reps));
+  if (ex.mode === MODE.SIDE) parts.push('2');
+  return `${parts.join(' × ')} = ${vol} kg`;
+}
+
+export const fmtKg = (v) => `${fmtInt(v)} kg`;

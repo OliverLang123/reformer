@@ -3,7 +3,7 @@
 
 import { uid, localDate, parseNum, parseTimeInput, fmtTime } from './util.js';
 import {
-  TYPE_TO_SHEET, fieldsFor, isTimeMode, exerciseInfo, previousSession, previousFor,
+  TYPE_TO_SHEET, MODE, fieldsFor, isTimeMode, isTimeField, exerciseInfo, previousSession, previousFor,
   historyBest, isBetter, setVolume, bodyWeightOn,
 } from './model.js';
 
@@ -15,7 +15,7 @@ function newSet(workoutId, type = 'N', target = {}) {
   return {
     id: uid('S').replace('S-', 'S-' + workoutId.slice(-6) + '-'),
     type,
-    input: { kg: '', reps: '', time: '', km: '' },
+    input: { kg: '', reps: '', time: '', timeR: '', km: '' },
     target,
     done: false,
     confirmedAt: null,
@@ -82,16 +82,21 @@ export function setRir(w, exKey, setId, rir) {
   return n;
 }
 
+const has = (v) => v !== undefined && v !== null;
+
 // Hodnota pole: co uživatel napsal, jinak šedý cíl z rutiny, jinak MINULE.
+// Pravá strana (timeR) má stejný cíl jako levá (ČAS z rutiny platí pro každou stranu).
 export function effective(set, field, prev) {
   const raw = set.input[field];
   if (raw !== '' && raw !== null && raw !== undefined) {
-    return field === 'time' ? parseTimeInput(raw) : parseNum(raw);
+    return isTimeField(field) ? parseTimeInput(raw) : parseNum(raw);
   }
   const t = set.target || {};
   if (field === 'reps' && t.reps) return t.reps.hi;
-  if (t[field] !== undefined && t[field] !== null) return t[field];
-  if (prev && prev[field] !== undefined && prev[field] !== null) return prev[field];
+  if (has(t[field])) return t[field];
+  if (field === 'timeR' && has(t.time)) return t.time;
+  if (prev && has(prev[field])) return prev[field];
+  if (field === 'timeR' && prev && has(prev.time)) return prev.time;
   return null;
 }
 
@@ -113,9 +118,10 @@ export function confirmSet(w, exKey, setId, model) {
   }
   fieldsFor(info.mode).forEach((f) => {
     const v = values[f];
-    set.input[f] = v === null ? '' : f === 'time' ? fmtTime(v) : String(v).replace('.', ',');
+    set.input[f] = v === null ? '' : isTimeField(f) ? fmtTime(v) : String(v).replace('.', ',');
   });
   set.done = true;
+  set.watchSide = null;
   set.confirmedAt = new Date().toISOString();
 
   // Nové maximum: lepší než celá historie i dřívější série tohoto tréninku. První záznam se nepočítá.
@@ -149,10 +155,60 @@ export function confirmSet(w, exKey, setId, model) {
   return { workout: n, rest };
 }
 
+// ---------- stopky u cviků na čas ----------
+// Stav je v tréninku (w.watch), takže přežije zavření appky. Čas se počítá z času startu,
+// ne přičítáním, takže sedí i po zamknutí telefonu.
+//   w.watch = { exKey, setId, side: 'L' | 'R' | null, start: ms, target: s | null }
+// U „čas na stranu“ po Stop levé zůstane v sérii watchSide = 'R' (další Start měří pravou).
+
+export const watchElapsed = (watch, now = Date.now()) => Math.max(0, Math.floor((now - watch.start) / 1000));
+
+export function startWatch(w, exKey, setId, model) {
+  const n = clone(w);
+  const ex = findEx(n, exKey);
+  const set = ex && ex.sets.find((x) => x.id === setId);
+  if (!set) return w;
+  const info = exerciseInfo(model, ex.name);
+  const side = info.mode === MODE.TIME_SIDE ? (set.watchSide || 'L') : null;
+  const t = set.target || {};
+  n.watch = { exKey, setId, side, start: Date.now(), target: has(t.time) && t.time > 0 ? t.time : null };
+  n.restEnd = null; // start stopek ukončí odpočinek
+  return n;
+}
+
+export function cancelWatch(w) {
+  const n = clone(w);
+  n.watch = null;
+  return n;
+}
+
+// Stop: zapíše naměřený čas (celé sekundy dolů). Levá strana přepne sérii na pravou,
+// jinak se série potvrdí jako ✓ (odpočinek podle pravidel, v supersetu až po kole).
+// Vrátí { workout, rest, error }.
+export function stopWatch(w, model, now = Date.now()) {
+  const watch = w.watch;
+  if (!watch) return { workout: w };
+  const n = clone(w);
+  n.watch = null;
+  const ex = findEx(n, watch.exKey);
+  const set = ex && ex.sets.find((x) => x.id === watch.setId);
+  if (!set) return { workout: n };
+  const secs = watchElapsed(watch, now);
+  if (watch.side === 'L') {
+    set.input.time = fmtTime(secs);
+    set.watchSide = 'R';
+    return { workout: n };
+  }
+  if (watch.side === 'R') set.input.timeR = fmtTime(secs);
+  else set.input.time = fmtTime(secs);
+  return confirmSet(n, ex.key, set.id, model);
+}
+
 export function unconfirmSet(w, exKey, setId) {
   const n = clone(w);
   const s = findEx(n, exKey).sets.find((x) => x.id === setId);
   s.done = false;
+  s.watchSide = null;
   s.pr = false;
   s.confirmedAt = null;
   return n;
@@ -166,7 +222,7 @@ export function addSet(w, exKey) {
   const target = {};
   if (last) {
     ['kg', 'time', 'km'].forEach((f) => {
-      const v = last.input[f] !== '' ? (f === 'time' ? parseTimeInput(last.input[f]) : parseNum(last.input[f])) : last.target[f];
+      const v = last.input[f] !== '' ? (isTimeField(f) ? parseTimeInput(last.input[f]) : parseNum(last.input[f])) : last.target[f];
       if (v !== null && v !== undefined) target[f] = v;
     });
     const r = last.input.reps !== '' ? parseNum(last.input.reps) : null;
@@ -181,6 +237,7 @@ export function deleteSet(w, exKey, setId) {
   const n = clone(w);
   const ex = findEx(n, exKey);
   ex.sets = ex.sets.filter((s) => s.id !== setId);
+  if (n.watch && n.watch.setId === setId) n.watch = null;
   return n;
 }
 
@@ -196,7 +253,8 @@ export function replaceExercise(w, exKey, name) {
   const n = clone(w);
   const ex = findEx(n, exKey);
   ex.name = name;
-  ex.sets.forEach((s) => { s.target = {}; s.pr = false; });
+  ex.sets.forEach((s) => { s.target = {}; s.pr = false; s.watchSide = null; });
+  if (n.watch && n.watch.exKey === exKey) n.watch = null;
   return n;
 }
 
@@ -212,6 +270,7 @@ export function moveExercise(w, exKey, dir) {
 export function removeExercise(w, exKey) {
   const n = clone(w);
   n.exercises = n.exercises.filter((e) => e.key !== exKey);
+  if (n.watch && n.watch.exKey === exKey) n.watch = null;
   return n;
 }
 
@@ -268,7 +327,10 @@ export function fromSaved(model, id) {
     byKey.get(key).sets.push({
       id: s.id,
       type: s.type,
-      input: { kg: num(s.kg), reps: num(s.reps), time: s.time !== null ? fmtTime(s.time) : '', km: num(s.km) },
+      input: {
+        kg: num(s.kg), reps: num(s.reps), time: s.time !== null ? fmtTime(s.time) : '',
+        timeR: s.timeR !== null && s.timeR !== undefined ? fmtTime(s.timeR) : '', km: num(s.km),
+      },
       target: {},
       done: true,
       confirmedAt: s.confirmedAt || null,
@@ -290,6 +352,7 @@ export function setValues(s) {
     kg: parseNum(s.input.kg),
     reps: parseNum(s.input.reps),
     time: parseTimeInput(s.input.time),
+    timeR: parseTimeInput(s.input.timeR),
     km: parseNum(s.input.km),
   };
 }
@@ -335,6 +398,7 @@ export function snapshot(w, end = null) {
         kg: v.kg,
         reps: v.reps,
         time: v.time !== null ? fmtTime(v.time) : '',
+        timeR: v.timeR !== null ? fmtTime(v.timeR) : '',
         km: v.km,
         rir: s.rir,
         exerciseNote: ex.note || '',

@@ -16,6 +16,7 @@ const SCHEMA = {
     ['Pokyny trenéra', 'coach'],
     ['Video', 'video'],
     ['Fotka', 'photo'],
+    ['Jednoručky', 'dumbbells'], // 2 = dvě jednoručky (KG je váha jedné), 1 = jedna, prázdné = není jednoručka
   ],
   'Rutiny': [
     ['Rutina', 'routine'],
@@ -54,6 +55,7 @@ const SCHEMA = {
     ['V záloze', 'rir'],
     ['Poznámka ke cviku', 'exerciseNote'],
     ['Potvrzeno', 'confirmedAt'],
+    ['ČAS P', 'timeR'], // čas pravé strany u zápisu „čas na stranu“ (ČAS je levá)
     ['Objem', 'volume'], // jen vzorec, skript ani appka sem nepíšou
   ],
   'Tělo': [

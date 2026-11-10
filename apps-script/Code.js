@@ -19,6 +19,7 @@ const ACTIONS = {
   importWorkouts: (req) => importWorkouts_(req),
   uploadMedia: (req) => uploadMedia_(req),
   getMedia: (req) => getMedia_(req),
+  fixSetKg: (req) => fixSetKg_(req),
 };
 
 function doGet() {
@@ -179,7 +180,7 @@ function upsertRows_(sh, objs, shouldRemove) {
   ids.forEach((id, i) => { if (id) rowOf[id] = i + 2; });
 
   const width = writeWidth_(sh);
-  const textCols = ['ČAS'].map((n) => h[n]).filter((i) => i !== undefined && i < width);
+  const textCols = ['ČAS', 'ČAS P'].map((n) => h[n]).filter((i) => i !== undefined && i < width);
   let updated = 0;
   const fresh = [];
   const makeRow = rowMaker_(sh);
@@ -237,7 +238,7 @@ function importWorkouts_(req) {
     const seRow = rowMaker_(se);
     const setRows = [];
     fresh.forEach((x) => (x.sets || []).forEach((s) => setRows.push(seRow(Object.assign({}, s, { workout: x.workout.id })))));
-    appendRows_(se, setRows, ['ČAS']);
+    appendRows_(se, setRows, ['ČAS', 'ČAS P']);
 
     return {
       workoutsAdded: fresh.length,
