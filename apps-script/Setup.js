@@ -239,20 +239,20 @@ function selfTest() {
   const res2 = saveWorkout_({
     workout: { id: id, date: Utilities.formatDate(now, TZ, 'yyyy-MM-dd'), start: now.toISOString(), routine: 'Test' },
     sets: [
-      { id: id + '-1', exercise: 'Squat (Barbell)', order: 1, type: 'normální', kg: 105, reps: 10 },
-      { id: id + '-2', exercise: 'Bulgarian Split Squat (Dumbbell)', order: 2, type: 'normální', kg: 20, reps: 10 },
-      { id: id + '-3', exercise: 'Pull Up', order: 3, type: 'normální', reps: 10 },
-      { id: id + '-4', exercise: 'Rowing Machine', order: 4, type: 'normální', km: 2, time: '9:12' },
+      { id: id + '-1', exercise: 'Squat (Barbell)', order: 1, type: 'normální', kg: 105, reps: 10, confirmedAt: now.toISOString(), exerciseNote: '=1+1' },
+      { id: id + '-2', exercise: 'Bulgarian Split Squat (Dumbbell)', order: 2, type: 'normální', kg: 20, reps: 10, confirmedAt: now.toISOString() },
+      { id: id + '-3', exercise: 'Pull Up', order: 3, type: 'normální', reps: 10, confirmedAt: now.toISOString() },
+      { id: id + '-4', exercise: 'Rowing Machine', order: 4, type: 'normální', km: 2, time: '9:12', confirmedAt: now.toISOString() },
     ],
   });
   // Bez vesla a se zdvojenou sérií: veslo se má smazat, duplicita se nesmí zapsat.
   const res3 = saveWorkout_({
     workout: { id: id, date: Utilities.formatDate(now, TZ, 'yyyy-MM-dd'), start: now.toISOString(), routine: 'Test' },
     sets: [
-      { id: id + '-1', exercise: 'Squat (Barbell)', order: 1, type: 'normální', kg: 105, reps: 10 },
-      { id: id + '-1', exercise: 'Squat (Barbell)', order: 1, type: 'normální', kg: 105, reps: 10 },
-      { id: id + '-2', exercise: 'Bulgarian Split Squat (Dumbbell)', order: 2, type: 'normální', kg: 20, reps: 10 },
-      { id: id + '-3', exercise: 'Pull Up', order: 3, type: 'normální', reps: 10 },
+      { id: id + '-1', exercise: 'Squat (Barbell)', order: 1, type: 'normální', kg: 105, reps: 10, confirmedAt: now.toISOString(), exerciseNote: '=1+1' },
+      { id: id + '-1', exercise: 'Squat (Barbell)', order: 1, type: 'normální', kg: 105, reps: 10, confirmedAt: now.toISOString(), exerciseNote: '=1+1' },
+      { id: id + '-2', exercise: 'Bulgarian Split Squat (Dumbbell)', order: 2, type: 'normální', kg: 20, reps: 10, confirmedAt: now.toISOString() },
+      { id: id + '-3', exercise: 'Pull Up', order: 3, type: 'normální', reps: 10, confirmedAt: now.toISOString() },
     ],
   });
   SpreadsheetApp.flush();
