@@ -3,12 +3,18 @@
   "private": true,
   "description": "Nástroje pro vývoj appky Reformer (appka sama se nesestavuje)",
   "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "test:e2e": "node test/e2e.mjs",
+    "release": "node tools/release.mjs",
+    "check:shell": "node tools/release.mjs --check",
     "push": "clasp push --force",
+    "deploy:script": "node tools/deploy-script.mjs",
     "status": "clasp show-file-status"
   },
   "devDependencies": {
     "@google/clasp": "^3.4.1",
     "htm": "^3.1.1",
     "playwright": "^1.56.1"
-  }
+  },
+  "type": "module"
 }

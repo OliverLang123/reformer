@@ -1,9 +1,9 @@
 // Rozpracovaný trénink: založení, úpravy, potvrzení série a podklad pro tabulku.
 // Funkce dostanou trénink, vrátí nový (původní se nemění).
 
-import { uid, localDate, parseNum, parseTimeInput, fmtTime } from './util.js';
+import { uid, pragueDate, parseNum, parseTimeInput, fmtTime } from './util.js';
 import {
-  TYPE_TO_SHEET, MODE, fieldsFor, isTimeMode, isTimeField, exerciseInfo, previousSession, previousFor,
+  TYPE_TO_SHEET, MODE, fieldsFor, isTimeMode, isTimeField, exerciseInfo, previousSession, previousFor, groupByExercise,
   historyBest, isBetter, setVolume, bodyWeightOn,
 } from './model.js';
 
@@ -100,6 +100,8 @@ export function effective(set, field, prev) {
   return null;
 }
 
+const INVALID = { kg: 'Neplatná váha', reps: 'Neplatná opakování', time: 'Neplatný čas', timeR: 'Neplatný čas', km: 'Neplatná vzdálenost' };
+
 // Potvrzení série ✓. Vrátí { workout, rest, error }.
 export function confirmSet(w, exKey, setId, model) {
   const n = clone(w);
@@ -108,6 +110,13 @@ export function confirmSet(w, exKey, setId, model) {
   const info = exerciseInfo(model, ex.name);
   const prevSes = previousSession(model, ex.name, n.id, n.edit ? n.start : null);
   const prev = previousFor(prevSes, set, ex.sets);
+
+  // Neprázdný vstup, který nejde převést na číslo, se nesmí potvrdit jako prázdná hodnota
+  const bad = fieldsFor(info.mode).find((f) => {
+    const raw = set.input[f];
+    return raw !== '' && raw !== null && raw !== undefined && effective(set, f, prev) === null;
+  });
+  if (bad) return { workout: w, error: INVALID[bad] };
 
   const values = {};
   fieldsFor(info.mode).forEach((f) => { values[f] = effective(set, f, prev); });
@@ -122,7 +131,19 @@ export function confirmSet(w, exKey, setId, model) {
   });
   set.done = true;
   set.watchSide = null;
-  set.confirmedAt = new Date().toISOString();
+  // Při úpravě z historie zůstává původní čas potvrzení
+  if (!(n.edit && set.confirmedAt)) set.confirmedAt = new Date().toISOString();
+
+  // Jiná váha než cíl: další nepotvrzené série stejného typu ji převezmou jako šedý cíl
+  if (!isTimeMode(info.mode) && values.kg !== null) {
+    const was = has(set.target && set.target.kg) ? set.target.kg : null;
+    if (was !== values.kg) {
+      const at = ex.sets.indexOf(set);
+      ex.sets.forEach((o, i) => {
+        if (i > at && !o.done && o.type === set.type) o.target = { ...(o.target || {}), kg: values.kg };
+      });
+    }
+  }
 
   // Nové maximum: lepší než celá historie i dřívější série tohoto tréninku. První záznam se nepočítá.
   set.pr = false;
@@ -142,11 +163,13 @@ export function confirmSet(w, exKey, setId, model) {
     }
   }
 
-  // Odpočinek: v supersetu až po posledním cviku kola.
+  // Odpočinek: v supersetu až po posledním cviku kola. Když další cviky supersetu už žádnou
+  // nepotvrzenou sérii nemají (různý počet sérií), kolo končí tímto cvikem.
   let rest = ex.rest;
   if (ex.superset) {
     const group = n.exercises.filter((e) => e.superset === ex.superset);
-    if (group[group.length - 1].key !== ex.key) rest = 0;
+    const later = group.slice(group.indexOf(ex) + 1);
+    if (later.some((e) => e.sets.some((x) => !x.done))) rest = 0;
   }
   if (rest > 0) {
     n.restTotal = rest;
@@ -210,7 +233,7 @@ export function unconfirmSet(w, exKey, setId) {
   s.done = false;
   s.watchSide = null;
   s.pr = false;
-  s.confirmedAt = null;
+  if (!n.edit) s.confirmedAt = null; // při úpravě z historie zůstává původní čas potvrzení
   return n;
 }
 
@@ -241,6 +264,22 @@ export function deleteSet(w, exKey, setId) {
   return n;
 }
 
+// Podklad pro Vrátit po smazání: série i s místem, kde byla
+export function removedSet(w, exKey, setId) {
+  const ex = findEx(w, exKey);
+  const index = ex ? ex.sets.findIndex((s) => s.id === setId) : -1;
+  return index < 0 ? null : { exKey, index, set: clone(ex.sets[index]) };
+}
+
+// Vrátí smazanou sérii na původní místo včetně hodnot a času potvrzení
+export function restoreSet(w, removed) {
+  const ex = removed && findEx(w, removed.exKey);
+  if (!ex || ex.sets.some((s) => s.id === removed.set.id)) return w;
+  const n = clone(w);
+  findEx(n, removed.exKey).sets.splice(Math.min(removed.index, ex.sets.length), 0, clone(removed.set));
+  return n;
+}
+
 export function addExercise(w, name) {
   const n = clone(w);
   const ex = newExercise(name);
@@ -249,21 +288,49 @@ export function addExercise(w, name) {
   return n;
 }
 
+export const hasConfirmed = (w, exKey) => !!(findEx(w, exKey) || { sets: [] }).sets.some((s) => s.done);
+
+// Nahrazení cviku. Když už má potvrzené série, zůstanou původnímu cviku a nový cvik
+// se vloží pod něj se zbylými (nepotvrzenými) sériemi.
 export function replaceExercise(w, exKey, name) {
   const n = clone(w);
-  const ex = findEx(n, exKey);
-  ex.name = name;
-  ex.sets.forEach((s) => { s.target = {}; s.pr = false; s.watchSide = null; });
+  const i = n.exercises.findIndex((e) => e.key === exKey);
+  const ex = n.exercises[i];
   if (n.watch && n.watch.exKey === exKey) n.watch = null;
+  const reset = (s) => { s.target = {}; s.pr = false; s.watchSide = null; s.input = { kg: '', reps: '', time: '', timeR: '', km: '' }; };
+  if (!ex.sets.some((s) => s.done)) {
+    ex.name = name;
+    ex.sets.forEach((s) => { s.target = {}; s.pr = false; s.watchSide = null; });
+    return n;
+  }
+  const rest = ex.sets.filter((s) => !s.done);
+  ex.sets = ex.sets.filter((s) => s.done);
+  const added = newExercise(name, { superset: ex.superset, rest: ex.rest });
+  rest.forEach(reset);
+  added.sets = rest.length ? rest : [newSet(n.id)];
+  n.exercises.splice(i + 1, 0, added);
   return n;
+}
+
+// Bloky pro změnu pořadí: cviky jednoho supersetu jdoucí za sebou se posouvají spolu
+export function exerciseBlocks(w) {
+  const blocks = [];
+  w.exercises.forEach((e) => {
+    const last = blocks[blocks.length - 1];
+    if (last && e.superset && last[0].superset === e.superset) last.push(e);
+    else blocks.push([e]);
+  });
+  return blocks;
 }
 
 export function moveExercise(w, exKey, dir) {
   const n = clone(w);
-  const i = n.exercises.findIndex((e) => e.key === exKey);
+  const blocks = exerciseBlocks(n);
+  const i = blocks.findIndex((b) => b.some((e) => e.key === exKey));
   const j = i + dir;
-  if (j < 0 || j >= n.exercises.length) return w;
-  [n.exercises[i], n.exercises[j]] = [n.exercises[j], n.exercises[i]];
+  if (i < 0 || j < 0 || j >= blocks.length) return w;
+  [blocks[i], blocks[j]] = [blocks[j], blocks[i]];
+  n.exercises = blocks.flat();
   return n;
 }
 
@@ -299,7 +366,7 @@ export function toggleSuperset(w, exKey) {
 export function fromSaved(model, id) {
   const saved = model.workouts.find((x) => x.id === id);
   if (!saved) return null;
-  const sets = [...(model.setsBy.get(id) || [])].sort((a, b) => a.order - b.order);
+  const sets = model.setsBy.get(id) || [];
   const w = {
     id,
     title: saved.routine || 'Trénink',
@@ -314,17 +381,11 @@ export function fromSaved(model, id) {
     asked3h: true,
     edit: true,
   };
-  const byKey = new Map();
-  sets.forEach((s) => {
-    const key = s.order + '|' + s.exercise;
-    if (!byKey.has(key)) {
-      const ex = newExercise(s.exercise, { superset: s.superset });
-      ex.note = s.exerciseNote || '';
-      byKey.set(key, ex);
-      w.exercises.push(ex);
-    }
+  groupByExercise(sets).forEach((g) => {
+    const ex = newExercise(g.name, { superset: g.superset });
+    ex.note = (g.sets.find((s) => s.exerciseNote) || {}).exerciseNote || '';
     const num = (v) => (v === null || v === undefined ? '' : String(v).replace('.', ','));
-    byKey.get(key).sets.push({
+    ex.sets = g.sets.map((s) => ({
       id: s.id,
       type: s.type,
       input: {
@@ -336,7 +397,8 @@ export function fromSaved(model, id) {
       confirmedAt: s.confirmedAt || null,
       rir: s.rir,
       pr: false,
-    });
+    }));
+    w.exercises.push(ex);
   });
   return w;
 }
@@ -358,7 +420,7 @@ export function setValues(s) {
 }
 
 export function stats(w, model) {
-  const bw = bodyWeightOn(model, localDate(new Date(w.start)));
+  const bw = bodyWeightOn(model, pragueDate(new Date(w.start)));
   let volume = 0;
   let sets = 0;
   let working = 0;
@@ -409,7 +471,7 @@ export function snapshot(w, end = null) {
   return {
     workout: {
       id: w.id,
-      date: localDate(new Date(w.start)),
+      date: pragueDate(new Date(w.start)),
       start: w.start,
       end: end,
       routine: w.title || w.routine || 'Trénink',

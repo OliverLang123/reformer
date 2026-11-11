@@ -32,6 +32,7 @@ const SCHEMA = {
     ['KM', 'km'],
     ['Odpočinek', 'rest'],
     ['Poznámka', 'note'],
+    ['Sérií', 'count'], // N stejných sérií za sebou (prázdné = 1), úsporný zápis rutin
   ],
   'Tréninky': [
     ['ID', 'id'],
@@ -66,7 +67,7 @@ const SCHEMA = {
 };
 
 // Přehledy a pomocné listy jen ze vzorců (apps-script/Overview.js).
-const FORMULA_SHEETS = ['Poslední trénink', 'Tento týden', 'Maxima', 'Objem po týdnech'];
+const FORMULA_SHEETS = ['Poslední trénink', 'Poslední tréninky', 'Tento týden', 'Maxima', 'Objem po týdnech'];
 
 const SET_TYPES = ['normální', 'rozcvička', 'do selhání', 'drop'];
 const MODES = ['váha × opakování', 'na stranu', 'vlastní váha', 'čas', 'čas na stranu', 'vzdálenost a čas'];
@@ -74,3 +75,7 @@ const MODES = ['váha × opakování', 'na stranu', 'vlastní váha', 'čas', '�
 // Pole, která jsou jen datum (bez času) a pole s datem i časem.
 const DATE_FIELDS = { date: true };
 const DATETIME_FIELDS = { start: true, end: true, confirmedAt: true };
+
+// Pole, která musí být číslo (nebo prázdná), a nejvyšší délka textů (ostatní texty 200 znaků).
+const NUMBER_FIELDS = { kg: true, reps: true, km: true, rir: true, order: true, bwFactor: true, dumbbells: true };
+const TEXT_LIMIT = { note: 2000, exerciseNote: 2000, routineNote: 2000, howto: 4000, coach: 2000 };

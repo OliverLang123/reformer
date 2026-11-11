@@ -1,4 +1,4 @@
-// Přehledové listy jen ze vzorců (etapa 4): Poslední trénink, Tento týden, Maxima, Objem po týdnech.
+// Přehledové listy jen ze vzorců: Poslední trénink, Poslední tréninky, Tento týden, Maxima, Objem po týdnech.
 // Každý list má jediný vzorec v buňce A1, který vypíše celou tabulku i se záhlavím.
 //
 // Vzorce jsou tu v anglické syntaxi (čárky). Pro českou tabulku se převedou na středníky
@@ -9,13 +9,16 @@
 // Co má být v A1, když vzorec funguje
 const OVERVIEW_A1 = {
   'Poslední trénink': 'Datum',
-  'Tento týden': 'Od',
+  'Poslední tréninky': 'Datum',
+  'Tento týden': 'Týden',
   'Maxima': 'Cvik',
   'Objem po týdnech': 'Týden od',
 };
 
 // Formáty sloupců (A1 zápis bez řádku, platí od řádku 2)
 const OVERVIEW_FORMATS = {
+  'Poslední tréninky': { A: 'd. M. yyyy' },
+  'Tento týden': { A: 'd. M. yyyy' },
   'Maxima': { E: 'd. M. yyyy' },
   'Objem po týdnech': { A: 'd. M. yyyy', E: '#,##0' },
 };
@@ -28,22 +31,28 @@ function overviewFormulas_(ref) {
   const TIME_MODE = (m) => 'OR(' + m + ' = "čas", ' + m + ' = "čas na stranu", ' + m + ' = "vzdálenost a čas")';
   const NOT_TIME = (m) => '(' + m + ' <> "čas") * (' + m + ' <> "čas na stranu") * (' + m + ' <> "vzdálenost a čas")';
   const DAY = (wid) => 'XLOOKUP(' + wid + ', ' + T('ID') + ', ' + T('Datum') + ', "")';
-  const NUM = (x) => 'IF(ISNUMBER(' + x + '), ' + x + ', 0)';
+  // Číslo i z textu ("32,5" zapsané jako text), prázdné a nečíselné = 0. Stejně jako parseNum v appce.
+  const NUM = (x) => 'IFERROR(VALUE(' + x + '), 0)';
   // Násobek jednoruček: 2 u cviků s Jednoručky = 2 (v KG je váha jedné), jinak 1
   const JJ = (ex) => 'IF(XLOOKUP(' + ex + ', ' + CV('Název') + ', ' + CV('Jednoručky') + ', "") & "" = "2", 2, 1)';
 
   const f = {};
 
   // Série posledního tréninku (podle začátku, bez něj podle data). Nahoře datum, rutina a poznámka.
-  // KG tak, jak je zapsané; ČAS P a Jednoručky jsou na konci, ať se starší sloupce neposunou.
+  // KG tak, jak je zapsané; ČAS P, Jednoručky, Objem a Pauza jsou na konci, ať se starší sloupce neposunou.
   f['Poslední trénink'] = '=ARRAYFORMULA(LET(' +
     'tid, ' + T('ID') + ', tdate, ' + T('Datum') + ', tstart, ' + T('Začátek') + ', ' +
     'key, IF(tid = "", -1, IF(ISNUMBER(tstart), tstart, IF(ISNUMBER(tdate), tdate, 0))), ' +
     'last, XLOOKUP(MAX(key), key, tid), ' +
     'wid, ' + S('Trénink') + ', mine, wid = last, ' +
     'picked, FILTER(HSTACK(' + ['Cvik', 'Pořadí', 'Superset', 'Typ', 'KG', 'OPAK.', 'ČAS', 'KM', 'V záloze', 'Poznámka ke cviku', 'ČAS P'].map(S).join(', ') +
-    ', XLOOKUP(' + S('Cvik') + ', ' + CV('Název') + ', ' + CV('Jednoručky') + ', "") & "", ROW(wid)), mine), ' +
-    'sorted, CHOOSECOLS(SORT(picked, 2, TRUE, 13, TRUE), SEQUENCE(1, 12)), ' +
+    ', XLOOKUP(' + S('Cvik') + ', ' + CV('Název') + ', ' + CV('Jednoručky') + ', "") & "", ' +
+    NUM(S('Objem')) + ', ' + S('Potvrzeno') + ', ROW(wid)), mine), ' +
+    'full, SORT(picked, 2, TRUE, 15, TRUE), ' +
+    // Pauza: čas od předchozí potvrzené série téhož tréninku (m:ss), u první série prázdné
+    'conf, INDEX(full, , 14), ' +
+    'pause, MAP(conf, LAMBDA(x, IF(ISNUMBER(x), IFERROR(TEXT(x - MAX(FILTER(conf, ISNUMBER(conf), conf < x)), "[m]:ss"), ""), ""))), ' +
+    'sorted, HSTACK(CHOOSECOLS(full, SEQUENCE(1, 13)), pause), ' +
     'vol, SUM(' + NUM(S('Objem')) + ' * mine), ' +
     'working, SUM(mine * (' + S('Typ') + ' <> "rozcvička")), ' +
     'day, XLOOKUP(last, tid, tdate, ""), ' +
@@ -56,38 +65,69 @@ function overviewFormulas_(ref) {
     'HSTACK("Objem kg", ROUND(vol), "Sérií", SUM(--mine), "Pracovních", working), ' +
     'HSTACK("Poznámka", XLOOKUP(last, tid, ' + T('Poznámka') + ', "") & ""), ' +
     '"", ' +
-    'HSTACK("Cvik", "Pořadí", "Superset", "Typ", "KG", "OPAK.", "ČAS", "KM", "V záloze", "Poznámka ke cviku", "ČAS P", "Jednoručky"), ' +
+    'HSTACK("Cvik", "Pořadí", "Superset", "Typ", "KG", "OPAK.", "ČAS", "KM", "V záloze", "Poznámka ke cviku", "ČAS P", "Jednoručky", "Objem", "Pauza"), ' +
     'sorted), "")))';
 
-  // Souhrn po cvicích za posledních 7 dní (dnes a 6 dní zpět), nahoře součet.
-  // Nejtěžší série jako součet KG × J (dvě jednoručky po 20 = 40 kg).
+  // Posledních 5 tréninků po cvicích (nejnovější nahoře), jeden řádek na cvik v pořadí tréninku.
+  // Série jako text: váha tak, jak je v KG (u jednoruček váha jedné) "100×10", bez váhy "×10",
+  // rozcvička s předponou "W ", čas "0:34", na stranu "0:34/0:31", vzdálenost "2 km 9:12".
+  f['Poslední tréninky'] = '=ARRAYFORMULA(LET(' +
+    'head, HSTACK("Datum", "Trénink", "Rutina", "Pořadí", "Cvik", "Série", "Objem", "V záloze", "Poznámka ke cviku"), ' +
+    'tid, ' + T('ID') + ', tdate, ' + T('Datum') + ', tstart, ' + T('Začátek') + ', ' +
+    'key, IF(tid = "", -1, IF(ISNUMBER(tstart), tstart, IF(ISNUMBER(tdate), tdate, 0))), ' +
+    'ids, INDEX(SORTN(FILTER(HSTACK(tid, key), tid <> ""), 5, 0, 2, FALSE), , 1), ' +
+    'wid, ' + S('Trénink') + ', mine, ISNUMBER(XMATCH(wid, ids)), ' +
+    'w, FILTER(wid, mine), o, FILTER(' + S('Pořadí') + ', mine), e, FILTER(' + S('Cvik') + ', mine), ' +
+    't, FILTER(' + S('Typ') + ', mine), kg, FILTER(' + S('KG') + ', mine), reps, FILTER(' + S('OPAK.') + ', mine), ' +
+    'tm, FILTER(' + S('ČAS') + ' & "", mine), tmr, FILTER(' + S('ČAS P') + ' & "", mine), km, FILTER(' + S('KM') + ', mine), ' +
+    'vol, FILTER(' + NUM(S('Objem')) + ', mine), rir, FILTER(' + S('V záloze') + ', mine), note, FILTER(' + S('Poznámka ke cviku') + ' & "", mine), ' +
+    'md, XLOOKUP(e, ' + CV('Název') + ', ' + CV('Zápis') + ', "váha × opakování"), ' +
+    'txt, IF(t = "rozcvička", "W ", "") & IF(md = "vzdálenost a čas", IF(ISNUMBER(km), km & " km ", "") & tm, ' +
+    'IF((md = "čas") + (md = "čas na stranu"), tm & IF(tmr = "", "", "/" & tmr), IF(ISNUMBER(kg), kg & "", "") & "×" & reps)), ' +
+    'k, w & "|" & o & "|" & e, keys, UNIQUE(k), ' +
+    'kw, MAP(keys, LAMBDA(x, INDEX(FILTER(w, k = x), 1))), ' +
+    'ko, MAP(keys, LAMBDA(x, INDEX(FILTER(o, k = x), 1))), ' +
+    'ke, MAP(keys, LAMBDA(x, INDEX(FILTER(e, k = x), 1))), ' +
+    'ser, MAP(keys, LAMBDA(x, TEXTJOIN(", ", TRUE, FILTER(txt, k = x)))), ' +
+    'kvol, MAP(keys, LAMBDA(x, ROUND(SUM((k = x) * vol)))), ' +
+    'krir, MAP(keys, LAMBDA(x, TEXTJOIN(", ", TRUE, FILTER(rir, k = x)))), ' +
+    'knote, MAP(keys, LAMBDA(x, IFERROR(INDEX(FILTER(note, k = x, note <> ""), 1), ""))), ' +
+    'tbl, HSTACK(XLOOKUP(kw, tid, tdate, ""), kw, XLOOKUP(kw, tid, ' + T('Rutina') + ', "") & "", ko, ke, ser, kvol, krir, knote, XLOOKUP(kw, tid, key, 0)), ' +
+    'IFERROR(VSTACK(head, CHOOSECOLS(SORT(tbl, 10, FALSE, 4, TRUE), SEQUENCE(1, 9))), head)))';
+
+  // Souhrn po cvicích za týden plánu (pondělí až neděle): nahoře aktuální týden, pod ním minulý
+  // pro srovnání. První sloupec je datum pondělí, týdny se kryjí s listem Objem po týdnech.
+  // Nejtěžší série jako součet KG × J (dvě jednoručky po 20 = 40 kg). U cviků na čas a vzdálenost
+  // se počítají i rozcvičky (veslo je v rutinách rozcvička).
   f['Tento týden'] = '=ARRAYFORMULA(LET(' +
     'wid, ' + S('Trénink') + ', day, ' + DAY('wid') + ', ' +
-    'recent, (wid <> "") * ISNUMBER(day) * (day >= TODAY() - 6) * (day <= TODAY()), ' +
-    'from, TODAY() - 6, ' +
-    'head, HSTACK("Od", TEXT(from, "d. M. yyyy"), "Do", TEXT(TODAY(), "d. M. yyyy")), ' +
-    'IF(SUM(recent) = 0, IFNA(VSTACK(head, "Za posledních 7 dní žádný trénink"), ""), LET(' +
-    'w, FILTER(wid, recent), e, FILTER(' + S('Cvik') + ', recent), t, FILTER(' + S('Typ') + ', recent), ' +
-    'kg, FILTER(' + NUM(S('KG')) + ' * ' + JJ(S('Cvik')) + ', recent), reps, FILTER(' + S('OPAK.') + ', recent), ' +
-    'tm, FILTER(' + S('ČAS') + ' & "", recent), km, FILTER(' + S('KM') + ', recent), ' +
-    'vol, FILTER(' + NUM(S('Objem')) + ', recent), ' +
+    'monday, TODAY() - WEEKDAY(TODAY(), 2) + 1, ' +
+    'alle, ' + S('Cvik') + ', allt, ' + S('Typ') + ', allkg, ' + NUM(S('KG')) + ' * ' + JJ(S('Cvik')) + ', allreps, ' + S('OPAK.') + ', ' +
+    'alltm, ' + S('ČAS') + ' & "", allkm, ' + S('KM') + ', allvol, ' + NUM(S('Objem')) + ', ' +
+    'blok, LAMBDA(start, LET(' +
+    'recent, (wid <> "") * ISNUMBER(day) * (day >= start) * (day <= start + 6), ' +
+    'IF(SUM(recent) = 0, HSTACK(start, "žádný trénink"), LET(' +
+    'w, FILTER(wid, recent), e, FILTER(alle, recent), t, FILTER(allt, recent), ' +
+    'kg, FILTER(allkg, recent), reps, FILTER(allreps, recent), ' +
+    'tm, FILTER(alltm, recent), km, FILTER(allkm, recent), vol, FILTER(allvol, recent), ' +
     'exs, UNIQUE(e), ' +
     'best, MAP(exs, LAMBDA(x, LET(' +
     'm, XLOOKUP(x, ' + CV('Název') + ', ' + CV('Zápis') + ', "váha × opakování"), ' +
     'IF(' + TIME_MODE('m') + ', ' +
-    'IFERROR(TEXTJOIN(", ", TRUE, FILTER(IF(ISNUMBER(km), km & " km ", "") & tm, e = x, t <> "rozcvička")), ""), ' +
+    'IFERROR(TEXTJOIN(", ", TRUE, FILTER(IF(ISNUMBER(km), km & " km ", "") & tm, e = x)), ""), ' +
     'IFERROR(LET(b, SORT(FILTER(HSTACK(kg, reps), e = x, t <> "rozcvička", ISNUMBER(reps)), 1, FALSE, 2, FALSE), ' +
     'bk, INDEX(b, 1, 1), br, INDEX(b, 1, 2), ' +
     'IF(m = "vlastní váha", IF(bk > 0, "+" & bk & " kg × " & br, br & " opak."), bk & " kg × " & br)), ""))))), ' +
-    'IFNA(VSTACK(head, ' +
-    'HSTACK("Tréninků", COUNTUNIQUE(w), "Sérií", ROWS(w), "Objem kg", ROUND(SUM(vol))), ' +
-    '"", ' +
-    'HSTACK("Cvik", "Tréninků", "Sérií", "Nejtěžší série", "Celkem zvednuto"), ' +
-    'HSTACK(exs, ' +
+    'VSTACK(' +
+    'HSTACK(start, "Celkem", COUNTUNIQUE(w), ROWS(w), "", ROUND(SUM(vol))), ' +
+    'HSTACK(MAP(exs, LAMBDA(x, start)), exs, ' +
     'MAP(exs, LAMBDA(x, COUNTUNIQUE(FILTER(w, e = x)))), ' +
     'MAP(exs, LAMBDA(x, SUM(--(e = x)))), ' +
     'best, ' +
-    'MAP(exs, LAMBDA(x, ROUND(SUM((e = x) * vol)))))), "")))))';
+    'MAP(exs, LAMBDA(x, ROUND(SUM((e = x) * vol)))))))))), ' +
+    'IFNA(VSTACK(' +
+    'HSTACK("Týden", "Cvik", "Tréninků", "Sérií", "Nejtěžší série", "Celkem zvednuto"), ' +
+    'blok(monday), blok(monday - 7)), "")))';
 
   // Maximum každého cviku: největší KG × J (součet obou jednoruček), při shodě víc opakování, datum posledního
   // dosažení (jako detail cviku v appce).
@@ -159,7 +199,7 @@ function ensureOverviews_(ss, log) {
       cell.setFormula(toSemicolons_(formulas[name]));
       SpreadsheetApp.flush();
     }
-    if (name === 'Maxima' || name === 'Objem po týdnech') {
+    if (name === 'Maxima' || name === 'Objem po týdnech' || name === 'Poslední tréninky' || name === 'Tento týden') {
       sh.setFrozenRows(1);
       sh.getRange('1:1').setFontWeight('bold');
     }

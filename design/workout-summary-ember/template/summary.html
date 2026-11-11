@@ -201,8 +201,8 @@
 
     <section class="tile tile-exercises">
       <div class="tile-exercises__head mono-label">
-        <span>Hlavní cviky</span>
-        <span>vs. minule</span>
+        <span data-bind="exHead">Hlavní cviky</span>
+        <span data-bind="exHeadRight">vs. minule</span>
       </div>
       <div class="ex-list" id="ex-list"></div>
     </section>
@@ -211,13 +211,13 @@
   <div class="row-stats">
     <section class="tile tile-volume">
       <div class="stat-head">
-        <span class="mono-label">Celkem zvednuto</span>
+        <span class="mono-label" data-bind="volumeLabel">Celkem zvednuto</span>
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#8A9099" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.5 8h9l3 12h-15z"/><circle cx="12" cy="5" r="2.2"/></svg>
       </div>
       <div class="stat-body">
         <div class="stat-value-row">
           <span class="stat-value" data-bind="volume" data-fit></span>
-          <span class="stat-unit">kg</span>
+          <span class="stat-unit" data-bind="volumeUnit">kg</span>
         </div>
         <span class="stat-note" data-bind="volumeNote"></span>
       </div>
@@ -406,6 +406,15 @@
       if (ex.isPR) nameRow.appendChild(el('span', 'badge-max', 'MAX'));
       main.appendChild(nameRow);
       var sets = el('span', 'ex__sets');
+      // Reformer: cvik na čas nebo vzdálenost (timed: true) má hotový text ("0:34 / 0:31", "2 km 9:12")
+      // a s minulým tréninkem se neporovnává
+      if (ex.timed) {
+        sets.appendChild(el('span', 'ex__top', ex.text || ''));
+        main.appendChild(sets);
+        row.appendChild(main);
+        list.appendChild(row);
+        return;
+      }
       sets.appendChild(el('span', 'ex__top', exSet(ex, ex.top)));
       if (ex.previous) sets.appendChild(el('span', 'ex__prev', 'minule ' + exPrev(ex, ex.previous)));
       main.appendChild(sets);
@@ -419,11 +428,19 @@
       list.appendChild(row);
     });
 
+    // Reformer: trénink bez vah (data.timed = { sets, duration }): místo objemu počet všech sérií,
+    // místo nejtěžší série délka tréninku
+    var timed = data.timed || null;
+    bind('exHead', timed ? 'Cviky na čas' : 'Hlavní cviky');
+    bind('exHeadRight', timed ? '' : 'vs. minule');
+
     // volume
     var vol = data.totalVolumeKg || 0;
-    bind('volume', nf0.format(vol));
+    bind('volumeLabel', timed ? 'Sérií celkem' : 'Celkem zvednuto');
+    bind('volumeUnit', timed ? '' : 'kg');
+    bind('volume', timed ? String(timed.sets || 0) : nf0.format(vol));
     var cars = Math.round((vol / CAR_KG) * 10) / 10;
-    bind('volumeNote', cars > 0 ? '≈ ' + nf1.format(cars) + ' ' + plural(cars, 'osobní auto', 'osobní auta', 'osobních aut', 'osobního auta') : '');
+    bind('volumeNote', timed ? 'včetně rozcviček' : cars > 0 ? '≈ ' + nf1.format(cars) + ' ' + plural(cars, 'osobní auto', 'osobní auta', 'osobních aut', 'osobního auta') : '');
 
     // sets
     var n = data.workingSets || 0;
@@ -434,7 +451,13 @@
     var all = data.exercises || [];
     var pr = data.personalRecord || all.filter(function (e) { return e.isPR; })[0];
     var tilePr = document.getElementById('tile-pr');
-    if (pr) {
+    if (timed) {
+      tilePr.classList.add('tile-pr--neutral');
+      bind('prLabel', 'Délka tréninku');
+      bind('prName', '');
+      bind('prValue', timed.duration || '');
+      bind('prNote', timed.duration ? 'od začátku do uložení' : '');
+    } else if (pr) {
       tilePr.classList.remove('tile-pr--neutral');
       bind('prLabel', 'Nové maximum');
       bind('prName', pr.name);
@@ -442,7 +465,7 @@
       var dl2 = delta(pr);
       bind('prNote', dl2.kind === 'new' ? 'první záznam' : (dl2.kind === 'up' ? dl2.text + ' oproti minule' : 'osobní rekord'));
     } else {
-      var heavy = all.slice().sort(function (a, b) { return b.top.weightKg - a.top.weightKg; })[0];
+      var heavy = all.filter(function (e) { return e.top; }).sort(function (a, b) { return b.top.weightKg - a.top.weightKg; })[0];
       tilePr.classList.add('tile-pr--neutral');
       bind('prLabel', 'Nejtěžší série');
       bind('prName', heavy ? heavy.name : '');

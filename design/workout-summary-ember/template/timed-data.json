@@ -1,0 +1,16 @@
+{
+  "label": "Silový trénink D",
+  "title": "Core + kardio",
+  "date": "2026-12-03",
+  "totalVolumeKg": 0,
+  "workingSets": 7,
+  "theme": { "accent": "#FF6A2B" },
+  "timed": { "sets": 8, "duration": "42 min" },
+  "exercises": [
+    { "name": "Rowing Machine", "equipment": "", "timed": true, "text": "2 km 9:12", "isPR": false },
+    { "name": "Side Plank", "equipment": "", "timed": true, "text": "0:34 / 0:31", "isPR": false },
+    { "name": "Copenhagen Plank", "equipment": "", "timed": true, "text": "0:25 / 0:24", "isPR": false },
+    { "name": "Plank", "equipment": "", "timed": true, "text": "1:15", "isPR": false }
+  ],
+  "personalRecord": null
+}

@@ -1,5 +1,7 @@
 // Založení a údržba tabulky. Spouští se ručně z editoru Apps Script (funkce setup).
-// Dá se pustit opakovaně: nic nepřepíše, jen doplní, co chybí.
+// Dá se pustit opakovaně. V datových listech (Cviky, Rutiny, Tréninky, Série, Tělo) nic nepřepíše,
+// jen doplní chybějící sloupce a cviky. Přehledové listy a vzorec Objem přepíše, když se jejich
+// vzorec liší od aktuální verze (přehledový list se přitom celý vyčistí, jsou v něm jen výsledky).
 
 function setup() {
   const ss = SpreadsheetApp.getActive();
@@ -22,6 +24,7 @@ function setup() {
 
   const added = seedExercises_(ss.getSheetByName('Cviky'));
   if (added) log.push('přidáno cviků: ' + added);
+  protectSheets_(ss, log);
 
   ['List 1', 'Sheet1', 'List1'].forEach((name) => {
     const sh = ss.getSheetByName(name);
@@ -79,11 +82,13 @@ function formatSheets_(ss) {
   colRange_(se, 'ČAS').setNumberFormat('@');
   colRange_(se, 'ČAS P').setNumberFormat('@');
   colRange_(se, 'Potvrzeno').setNumberFormat('H:mm:ss');
+  colRange_(se, 'Poznámka ke cviku').setNumberFormat('@');
+  colRange_(tr, 'Poznámka').setNumberFormat('@');
   colRange_(se, 'Typ').setDataValidation(listRule_(SET_TYPES));
 
   // V Rutinách se píšou rozsahy (8-10) a časy (2:00), tabulka by z nich jinak udělala datum nebo hodiny.
   const ru = ss.getSheetByName('Rutiny');
-  ['KG', 'OPAK.', 'ČAS', 'KM', 'Odpočinek'].forEach((h) => colRange_(ru, h).setNumberFormat('@'));
+  ['KG', 'OPAK.', 'ČAS', 'KM', 'Odpočinek', 'Poznámka', 'Poznámka k rutině'].forEach((h) => colRange_(ru, h).setNumberFormat('@'));
   colRange_(ru, 'Typ').setDataValidation(listRule_(SET_TYPES));
 
   const cv = ss.getSheetByName('Cviky');
@@ -91,6 +96,27 @@ function formatSheets_(ss) {
   colRange_(cv, 'Provedení').setWrap(true);
 
   colRange_(ss.getSheetByName('Tělo'), 'Datum').setNumberFormat('d. M. yyyy');
+}
+
+// Ochrana proti přepsání omylem: jen varování, nic neblokuje (skript, konektor i ruční úprava
+// projdou). Přehledové listy celé, u datových listů řádek záhlaví.
+function protectSheets_(ss, log) {
+  const mark = 'Reformer: ';
+  let count = 0;
+  FORMULA_SHEETS.forEach((name) => {
+    const sh = ss.getSheetByName(name);
+    if (sh.getProtections(SpreadsheetApp.ProtectionType.SHEET).length) return;
+    sh.protect().setDescription(mark + 'list jen ze vzorce').setWarningOnly(true);
+    count++;
+  });
+  Object.keys(SCHEMA).forEach((name) => {
+    const sh = ss.getSheetByName(name);
+    const has = sh.getProtections(SpreadsheetApp.ProtectionType.RANGE).some((p) => String(p.getDescription()).indexOf(mark) === 0);
+    if (has) return;
+    sh.getRange('1:1').protect().setDescription(mark + 'záhlaví').setWarningOnly(true);
+    count++;
+  });
+  if (count) log.push('ochrana s varováním: ' + count);
 }
 
 function listRule_(values) {
@@ -101,6 +127,7 @@ function listRule_(values) {
 // (tělesná váha × podíl + KG × J) × OPAK. J = 2 u cviků s Jednoručky = 2 (v KG je váha
 // jedné jednoručky), jinak 1. Tělesná váha je poslední měření z listu Tělo do data
 // tréninku, před prvním měřením platí první měření. Stejná pravidla má setVolume v js/model.js.
+// KG a podíl se berou přes VALUE, takže číslo zapsané jako text ("32,5") se počítá stejně jako v appce.
 function volumeFormula_(ss) {
   return volumeFormulaFor_((sheet) => headerIndex_(ss.getSheetByName(sheet)));
 }
@@ -135,15 +162,16 @@ function volumeFormulaFor_(headers) {
     ['Trénink', 'Cvik', 'KG', 'OPAK.'].map(se).join(', ') +
     ', LAMBDA(wid, ex, kg, reps, IF(OR(wid = "", ex = "", reps = ""), "", LET(' +
     'mode, XLOOKUP(ex, ' + cvName + ', ' + col('Cviky', 'Zápis') + ', "váha × opakování"), ' +
-    'share, N(XLOOKUP(ex, ' + cvName + ', ' + col('Cviky', 'Podíl tělesné váhy') + ', 0)), ' +
+    'share, IFERROR(VALUE(XLOOKUP(ex, ' + cvName + ', ' + col('Cviky', 'Podíl tělesné váhy') + ', 0)), 0), ' +
+    'kgn, IFERROR(VALUE(kg), 0), ' +
     'jj, IF(XLOOKUP(ex, ' + cvName + ', ' + col('Cviky', 'Jednoručky') + ', "") & "" = "2", 2, 1), ' +
     'day, XLOOKUP(wid, ' + col('Tréninky', 'ID') + ', ' + col('Tréninky', 'Datum') + ', 0), ' +
     'body, IF(share = 0, 0, XLOOKUP(day, ' + bodyDate + ', ' + bodyKg + ', ' +
     'XLOOKUP(MIN(' + bodyDate + '), ' + bodyDate + ', ' + bodyKg + ', 0), -1)), ' +
-    'IFS(mode = "na stranu", N(kg) * jj * reps * 2, ' +
-    'mode = "vlastní váha", (body * share + N(kg) * jj) * reps, ' +
+    'IFS(mode = "na stranu", kgn * jj * reps * 2, ' +
+    'mode = "vlastní váha", (body * share + kgn * jj) * reps, ' +
     'OR(mode = "čas", mode = "čas na stranu", mode = "vzdálenost a čas"), 0, ' +
-    'TRUE, N(kg) * jj * reps))))))}';
+    'TRUE, kgn * jj * reps))))))}';
 }
 
 // Stejný vzorec bez ohledu na mezery a oddělovač (čárka / středník)
@@ -198,7 +226,7 @@ function selfTest() {
   const res = saveWorkout_({
     workout: { id: id, date: Utilities.formatDate(now, TZ, 'yyyy-MM-dd'), start: now.toISOString(), end: now.toISOString(), routine: 'Test', note: 'zkušební trénink, smaže se' },
     sets: [
-      { id: id + '-1', exercise: 'Squat (Barbell)', order: 1, type: 'normální', kg: 100, reps: 10, confirmedAt: now.toISOString() },
+      { id: id + '-1', exercise: 'Squat (Barbell)', order: 1, type: 'normální', kg: 100, reps: 10, confirmedAt: now.toISOString(), exerciseNote: '=1+1' },
       { id: id + '-2', exercise: 'Bulgarian Split Squat (Dumbbell)', order: 2, type: 'normální', kg: 20, reps: 10, confirmedAt: now.toISOString() },
       { id: id + '-3', exercise: 'Pull Up', order: 3, type: 'normální', reps: 10, confirmedAt: now.toISOString() },
       { id: id + '-4', exercise: 'Rowing Machine', order: 4, type: 'normální', km: 2, time: '9:12', confirmedAt: now.toISOString() },
@@ -206,6 +234,7 @@ function selfTest() {
   });
   SpreadsheetApp.flush();
   const first = readSheet_('Série').filter((s) => s.workout === id);
+  const noteBack = first.length ? first[0].exerciseNote : undefined;
   // Stejné série znovu, dřep s jinou váhou: řádky se mají přepsat, ne přidat.
   const res2 = saveWorkout_({
     workout: { id: id, date: Utilities.formatDate(now, TZ, 'yyyy-MM-dd'), start: now.toISOString(), routine: 'Test' },
@@ -232,8 +261,9 @@ function selfTest() {
   const check = (cond) => (cond ? 'OK' : 'CHYBA');
   const out = [
     check(res.added === 4) + ' první uložení: ' + JSON.stringify(res),
-    check(res2.updated === 4 && res2.added === 0 && res2.removed === 0) + ' přepsání: ' + JSON.stringify(res2),
-    check(res3.updated === 3 && res3.added === 0 && res3.removed === 1) + ' bez vesla a s duplicitou: ' + JSON.stringify(res3),
+    check(noteBack === '=1+1') + ' poznámka „=1+1“ zůstala textem: ' + noteBack,
+    check(res2.updated === 1 && res2.added === 0 && res2.removed === 0) + ' přepsání (zapíše se jen změněný řádek): ' + JSON.stringify(res2),
+    check(res3.updated === 0 && res3.added === 0 && res3.removed === 1) + ' bez vesla a s duplicitou: ' + JSON.stringify(res3),
     check(data.length === 3) + ' řádků v Sérii: ' + data.length + ' (mají být 3)',
     'objemy po prvním uložení: ' + vol(first) + ' (čekám 1000, 800 = 20 × 2 jednoručky × 10 × 2 strany, tělesná váha × 10, prázdné a čas 9:12)',
     'objemy na konci: ' + vol(data) + ' (čekám 1050, 800, tělesná váha × 10)',

@@ -29,11 +29,32 @@ export function fmtInt(n) {
   return nf0.format(Math.round(n || 0));
 }
 
-// Čas: "1:30" -> 90, "90" (sekundy z tabulky) -> 90, 90 -> 90
+// Buňka tabulky formátovaná jako čas: tabulka čte "2:00" jako 2 hodiny. Trenér tím myslí
+// minuty a sekundy, proto se h:mm bez sekund bere jako m:ss ("0:02:00" i "2:00" = 120 s).
+function fromDayClock(secs) {
+  const h = Math.floor(secs / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  const s = secs % 60;
+  return h > 0 && s === 0 ? h * 60 + m : h * 3600 + m * 60 + s;
+}
+
+// Půlnoc nultého dne tabulky (30. 12. 1899) v pásmu Europe/Prague
+const SHEET_EPOCH = Date.UTC(1899, 11, 29, 23, 0, 0);
+
+// Čas: "1:30" -> 90, "90" (sekundy z tabulky) -> 90, 90 -> 90.
+// Z buňky formátované jako čas přijde zlomek dne (0,0625) nebo datum z roku 1899.
 export function parseTime(v) {
   if (v === null || v === undefined || v === '') return null;
-  if (typeof v === 'number') return Math.round(v);
+  if (typeof v === 'number') {
+    if (!Number.isFinite(v) || v < 0) return null;
+    return v > 0 && v < 1 ? fromDayClock(Math.round(v * 86400)) : Math.round(v);
+  }
   const s = String(v).trim();
+  if (/^\d{4}-\d{2}-\d{2}T/.test(s)) {
+    const secs = Math.round((Date.parse(s) - SHEET_EPOCH) / 1000);
+    return secs >= 0 && secs < 86400 ? fromDayClock(secs) : null;
+  }
+  if (!/^\d+(:\d{1,2}){0,2}$/.test(s)) return null;
   const parts = s.split(':').map((p) => parseInt(p, 10));
   if (parts.some((p) => Number.isNaN(p))) return null;
   if (parts.length === 1) return parts[0];
@@ -52,9 +73,10 @@ export function parseTimeInput(v) {
   return parseInt(d.slice(0, -2), 10) * 60 + parseInt(d.slice(-2), 10);
 }
 
-// Během psaní na numerické klávesnici (bez dvojtečky): "9" -> "9", "912" -> "9:12", "10512" -> "1:05:12"
+// Během psaní na numerické klávesnici (bez dvojtečky): "9" -> "9", "912" -> "9:12", "10512" -> "1:05:12".
+// Nuly na začátku se zahodí ("075" -> "75"), aby nevzniklo "0:75".
 export function typeTime(v) {
-  const d = String(v || '').replace(/\D/g, '').replace(/^0+(?=\d{3})/, '').slice(0, 6);
+  const d = String(v || '').replace(/\D/g, '').replace(/^0+(?=\d{2})/, '').slice(0, 6);
   if (d.length <= 2) return d;
   if (d.length <= 4) return `${d.slice(0, -2)}:${d.slice(-2)}`;
   return `${d.slice(0, -4)}:${d.slice(-4, -2)}:${d.slice(-2)}`;
@@ -83,10 +105,25 @@ export function uid(prefix) {
   return `${prefix}-${stamp}-${rnd}`;
 }
 
-// Místní datum RRRR-MM-DD (ne UTC, jinak by se večer posunul den)
-export function localDate(d = new Date()) {
-  const x = new Date(d);
-  return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+// Datum RRRR-MM-DD v pásmu Europe/Prague. Datum tréninku nesmí záviset na pásmu telefonu,
+// tabulka i skript počítají v pražském čase.
+const pragueFmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Prague', year: 'numeric', month: '2-digit', day: '2-digit' });
+export function pragueDate(d = new Date()) {
+  const p = {};
+  pragueFmt.formatToParts(new Date(d)).forEach((x) => { p[x.type] = x.value; });
+  return `${p.year}-${p.month}-${p.day}`;
+}
+
+// Během psaní do pole KG nebo OPAK.: jen číslice a jedna desetinná čárka (tečka se převede)
+export function typeNum(v) {
+  const s = String(v || '').replace(/\./g, ',').replace(/[^\d,]/g, '');
+  const i = s.indexOf(',');
+  return i < 0 ? s : s.slice(0, i + 1) + s.slice(i + 1).replace(/,/g, '');
+}
+
+// Klíč pro hledání názvu cviku: bez diakritiky, malá písmena, jedna mezera mezi slovy
+export function nameKey(s) {
+  return norm(s).replace(/\s+/g, ' ').trim();
 }
 
 export function fmtDate(iso) {

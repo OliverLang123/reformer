@@ -3,7 +3,7 @@
 // do listu Cviky (sloupce Video a Fotka). Nové video nebo fotka nahradí staré (staré jde do koše).
 
 const MEDIA_FOLDER = 'Reformer média';
-const MEDIA_MAX_BYTES = 20 * 1024 * 1024;
+const MEDIA_MAX_BYTES = 8 * 1024 * 1024;
 const MEDIA_COLUMN = { video: 'Video', photo: 'Fotka' };
 
 function mediaFolder_() {
@@ -28,16 +28,19 @@ function inFolder_(file, folder) {
 // req: { exercise, kind: 'video' | 'photo', mime, ext, data (base64) }
 function uploadMedia_(req) {
   const column = MEDIA_COLUMN[req.kind];
-  if (!column) throw new Error('Neznámý druh souboru: ' + req.kind);
-  if (!req.exercise) throw new Error('Chybí cvik');
+  if (!column) throw fail_('bad_request', 'Neznámý druh souboru: ' + req.kind);
+  if (!req.exercise) throw fail_('bad_request', 'Chybí cvik');
+  // Jen videa a fotky (video do sloupce Video, obrázek do sloupce Fotka)
+  const mime = String(req.mime || '');
+  if (mime.indexOf(req.kind === 'video' ? 'video/' : 'image/') !== 0) throw fail_('bad_request', 'Soubor není ' + (req.kind === 'video' ? 'video' : 'obrázek'));
   const bytes = Utilities.base64Decode(String(req.data || ''));
-  if (!bytes.length) throw new Error('Prázdný soubor');
-  if (bytes.length > MEDIA_MAX_BYTES) throw new Error('Soubor je větší než 20 MB');
+  if (!bytes.length) throw fail_('bad_request', 'Prázdný soubor');
+  if (bytes.length > MEDIA_MAX_BYTES) throw fail_('bad_request', 'Soubor je větší než 8 MB');
 
   const folder = mediaFolder_();
   const ext = String(req.ext || (req.kind === 'video' ? 'mp4' : 'jpg')).replace(/[^a-z0-9]/gi, '').slice(0, 5);
   const name = String(req.exercise).replace(/[\\/:*?"<>|]/g, '-') + ' - ' + (req.kind === 'video' ? 'video' : 'fotka') + '.' + ext;
-  const file = folder.createFile(Utilities.newBlob(bytes, req.mime || 'application/octet-stream', name));
+  const file = folder.createFile(Utilities.newBlob(bytes, mime, name));
   const url = 'https://drive.google.com/file/d/' + file.getId() + '/view';
 
   const lock = LockService.getScriptLock();

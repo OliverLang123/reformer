@@ -3,7 +3,10 @@
 
 import { call, idbGet, idbSet } from './store.js';
 
-export const MAX_BYTES = 20 * 1024 * 1024;
+export const MAX_BYTES = 8 * 1024 * 1024;
+const MIN_FREE = 50 * 1024 * 1024; // pod touto rezervou se média do telefonu nestahují
+
+export const fmtSize = (bytes) => `${(bytes / 1024 / 1024).toFixed(1).replace('.', ',')} MB`;
 const urls = new Map(); // id souboru -> object URL (v paměti, dokud appka běží)
 const pending = new Map(); // id souboru -> probíhající stažení
 
@@ -48,19 +51,35 @@ export async function mediaUrl(id) {
   return pending.get(id);
 }
 
-// Na pozadí stáhne do telefonu všechna videa a fotky, které tam ještě nejsou
+// Volné místo v úložišti prohlížeče (null, když ho prohlížeč nesdělí)
+async function freeSpace() {
+  try {
+    if (!navigator.storage || !navigator.storage.estimate) return null;
+    const { quota, usage } = await navigator.storage.estimate();
+    return quota ? quota - (usage || 0) : null;
+  } catch {
+    return null;
+  }
+}
+
+// Na pozadí stáhne do telefonu všechna videa a fotky, které tam ještě nejsou.
+// Vrátí 'low', když v telefonu není místo (média se pak nestahují, data tréninků mají přednost).
 export async function prefetchMedia(exercises) {
   for (const e of exercises) {
     for (const link of [e.photo, e.video]) {
       const id = fileId(link);
       if (!id || urls.has(id)) continue;
       try {
-        if (!(await idbGet('media:' + id))) await mediaUrl(id);
+        if (await idbGet('media:' + id)) continue;
+        const free = await freeSpace();
+        if (free !== null && free < MIN_FREE) return 'low';
+        await mediaUrl(id);
       } catch {
-        return; // bez signálu nebo chyba skriptu: zkusí se při dalším obnovení dat
+        return 'error'; // bez signálu nebo chyba skriptu: zkusí se při dalším obnovení dat
       }
     }
   }
+  return 'ok';
 }
 
 // Fotka z prvního snímku videa (JPEG, delší strana nejvýš 1080 px).
@@ -120,7 +139,8 @@ function ext(file, fallback) {
 
 async function upload(exercise, kind, blob, extension) {
   const data = await blobToBase64(blob);
-  const r = await call('uploadMedia', { exercise, kind, mime: blob.type, ext: extension, data }, undefined, 300000);
+  const mime = blob.type || (kind === 'video' ? 'video/mp4' : 'image/jpeg');
+  const r = await call('uploadMedia', { exercise, kind, mime, ext: extension, data }, undefined, 300000);
   await idbSet('media:' + r.id, blob).catch(() => {});
   urls.set(r.id, URL.createObjectURL(blob));
   return r.url;
@@ -128,7 +148,7 @@ async function upload(exercise, kind, blob, extension) {
 
 // Nové video cviku: nahraje video a fotku z jeho prvního snímku. Vrátí { video, photo } odkazy.
 export async function uploadVideo(exercise, file, onStep = () => {}) {
-  if (file.size > MAX_BYTES) throw new Error('Video má víc než 20 MB. Natoč kratší (3 až 8 s) nebo ve Full HD.');
+  if (file.size > MAX_BYTES) throw new Error(`Video má ${fmtSize(file.size)}, limit je 8 MB. Natoč kratší (3 až 8 s) ve Full HD, ne ve 4K.`);
   onStep('Připravuji fotku...');
   let poster = null;
   try { poster = await posterFromVideo(file); } catch { /* doplní se při dalším otevření karty */ }
@@ -150,6 +170,6 @@ export async function photoFromSavedVideo(exercise, videoObjectUrl) {
 }
 
 export async function uploadPhoto(exercise, file) {
-  if (file.size > MAX_BYTES) throw new Error('Fotka má víc než 20 MB.');
+  if (file.size > MAX_BYTES) throw new Error(`Fotka má ${fmtSize(file.size)}, limit je 8 MB.`);
   return { photo: await upload(exercise, 'photo', file, ext(file, 'jpg')) };
 }

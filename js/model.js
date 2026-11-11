@@ -1,7 +1,7 @@
 // Výpočty nad daty z tabulky: rutiny, MINULE, maxima, objem, tělesná váha.
 // Stejná pravidla jako vzorec Objem v listu Série (apps-script/Setup.js).
 
-import { parseNum, parseRange, parseTime, fmtNum, fmtInt, fmtTime } from './util.js';
+import { parseNum, parseRange, parseTime, fmtNum, fmtTime, nameKey } from './util.js';
 
 export const TYPE_FROM_SHEET = { 'normální': 'N', 'rozcvička': 'W', 'do selhání': 'F', 'drop': 'D' };
 export const TYPE_TO_SHEET = { N: 'normální', W: 'rozcvička', F: 'do selhání', D: 'drop' };
@@ -38,11 +38,15 @@ function splitList(s) {
   return String(s || '').split(',').map((x) => x.trim()).filter(Boolean);
 }
 
+// Zápis z listu Cviky bez ohledu na velikost písmen a mezery navíc (stejně jako vzorce v tabulce)
+const MODE_BY_KEY = new Map(Object.values(MODE).map((m) => [nameKey(m), m]));
+export const normMode = (v) => MODE_BY_KEY.get(nameKey(v)) || MODE.WEIGHT;
+
 function normExercise(e) {
   return {
-    name: String(e.name),
+    name: String(e.name).trim(),
     cz: e.cz || '',
-    mode: e.mode || MODE.WEIGHT,
+    mode: normMode(e.mode),
     primary: splitList(e.primary),
     secondary: splitList(e.secondary),
     bwFactor: parseNum(e.bwFactor) || 0,
@@ -76,7 +80,13 @@ export function normSet(s) {
 // Model z dat tabulky a fronty (neodeslané tréninky mají přednost před tabulkou).
 export function buildModel(data, queue = {}) {
   const exercises = new Map();
-  (data.exercises || []).forEach((e) => { if (e.name) exercises.set(String(e.name), normExercise(e)); });
+  const exerciseKeys = new Map(); // název bez diakritiky a velikosti písmen -> přesný název z listu Cviky
+  (data.exercises || []).forEach((e) => {
+    if (!e.name || !String(e.name).trim()) return;
+    const ex = normExercise(e);
+    exercises.set(ex.name, ex);
+    if (!exerciseKeys.has(nameKey(ex.name))) exerciseKeys.set(nameKey(ex.name), ex.name);
+  });
 
   const workouts = new Map();
   (data.workouts || []).forEach((w) => { if (w.id) workouts.set(String(w.id), { ...w, id: String(w.id) }); });
@@ -90,6 +100,15 @@ export function buildModel(data, queue = {}) {
 
   Object.keys(queue).forEach((id) => {
     const item = queue[id];
+    if (item.op === 'exercise') {
+      // Nový cvik založený v appce, ještě neodeslaný: k použití hned
+      const ex = normExercise(item.exercise);
+      if (!exerciseKeys.has(nameKey(ex.name))) {
+        exercises.set(ex.name, ex);
+        exerciseKeys.set(nameKey(ex.name), ex.name);
+      }
+      return;
+    }
     if (item.op === 'delete') {
       workouts.delete(id);
       setsBy.delete(id);
@@ -119,11 +138,37 @@ export function buildModel(data, queue = {}) {
     .filter((b) => b.weight)
     .sort((a, b) => a.date.localeCompare(b.date));
 
-  return { exercises, workouts: sorted, setsBy, history, body, routines: data.routines || [] };
+  return { exercises, exerciseKeys, workouts: sorted, setsBy, history, body, routines: data.routines || [] };
 }
 
+// Přesný název cviku z listu Cviky; hledá bez ohledu na velikost písmen, mezery navíc a diakritiku.
+// Neznámý cvik vrátí oříznutý název.
+export function canonicalName(model, name) {
+  const n = String(name === null || name === undefined ? '' : name).replace(/\s+/g, ' ').trim();
+  if (model.exercises.has(n)) return n;
+  return (model.exerciseKeys && model.exerciseKeys.get(nameKey(n))) || n;
+}
+
+export const knownExercise = (model, name) => model.exercises.has(canonicalName(model, name));
+
 export function exerciseInfo(model, name) {
-  return model.exercises.get(name) || normExercise({ name });
+  return model.exercises.get(canonicalName(model, name)) || normExercise({ name });
+}
+
+// Série tréninku po cvicích v pořadí tréninku. Stejný cvik podruhé (jiné Pořadí) je zvlášť.
+export function groupByExercise(sets) {
+  const groups = [];
+  const byKey = new Map();
+  [...sets].sort((a, b) => a.order - b.order).forEach((s) => {
+    const key = s.order + '|' + s.exercise;
+    if (!byKey.has(key)) {
+      const g = { key, name: s.exercise, order: s.order, superset: s.superset || null, sets: [] };
+      byKey.set(key, g);
+      groups.push(g);
+    }
+    byKey.get(key).sets.push(s);
+  });
+  return groups;
 }
 
 // Tělesná váha k datu: poslední měření do data, před prvním měřením první měření.
@@ -150,36 +195,108 @@ export function setVolume(set, ex, bw) {
 }
 
 // ---------- rutiny ----------
+// List Rutiny, úsporný zápis (starý zápis s vyplněnými všemi buňkami platí dál):
+// - prázdná Rutina, Týden a Poznámka k rutině = stejné jako řádek výš
+// - prázdný Cvik = další série stejného cviku jako řádek výš; Pořadí, Superset, Odpočinek a Poznámka
+//   se pak berou z toho cviku. U řádku s vyplněným Cvikem je Pořadí povinné.
+// - Sérií = N znamená N stejných sérií (prázdné = 1)
+// - KG, OPAK., ČAS a KM se nedědí, prázdná hodnota má význam
 
-export function routineList(model) {
+const filled = (v) => v !== undefined && v !== null && String(v).trim() !== '';
+const MAX_COUNT = 20;
+
+// Projde list Rutiny a vrátí rutiny i seznam problémů (číslo řádku listu, když ho skript poslal).
+function parseRoutines(model) {
   const byName = new Map();
-  model.routines.forEach((r) => {
-    const name = String(r.routine || '').trim();
-    if (!name || !r.exercise) return;
-    if (!byName.has(name)) byName.set(name, { name, week: r.week || '', note: '', exercises: [] });
-    const rt = byName.get(name);
-    if (r.routineNote && !rt.note) rt.note = String(r.routineNote);
-    const order = parseNum(r.order) || rt.exercises.length + 1;
-    let ex = rt.exercises.find((e) => e.order === order && e.name === String(r.exercise));
-    if (!ex) {
-      ex = { name: String(r.exercise), order, superset: r.superset ? String(r.superset) : null, rest: null, note: '', sets: [] };
-      rt.exercises.push(ex);
+  const issues = [];
+  let rt = null;
+  let ex = null;
+  let first = true;
+  model.routines.forEach((r, i) => {
+    const row = parseNum(r.row) || i + 2;
+    const issue = (text) => issues.push({ row, routine: rt ? rt.name : '', text });
+    const rowHasData = ['routine', 'exercise', 'order', 'type', 'kg', 'reps', 'time', 'km', 'rest', 'count'].some((k) => filled(r[k]));
+    if (!rowHasData) return;
+
+    if (filled(r.routine)) {
+      const name = String(r.routine).trim();
+      if (!byName.has(name)) byName.set(name, { name, week: '', note: '', exercises: [] });
+      if (!rt || rt.name !== name) ex = null;
+      rt = byName.get(name);
+    } else if (first) {
+      issue('První řádek nemá vyplněnou Rutinu');
     }
-    const rest = parseTime(r.rest);
-    if (rest !== null) ex.rest = rest;
-    if (r.note && !ex.note) ex.note = String(r.note);
-    ex.sets.push({
-      type: TYPE_FROM_SHEET[r.type] || 'N',
-      kg: parseNum(r.kg),
-      reps: parseRange(r.reps),
-      time: parseTime(r.time),
-      km: parseNum(r.km),
-    });
+    first = false;
+    if (!rt) return;
+    if (filled(r.week) && !rt.week) rt.week = String(r.week).trim();
+    if (filled(r.routineNote) && !rt.note) rt.note = String(r.routineNote);
+
+    if (filled(r.exercise)) {
+      const raw = String(r.exercise);
+      const name = canonicalName(model, raw);
+      let order = parseNum(r.order);
+      if (order === null) {
+        issue(`Cvik ${name} nemá Pořadí`);
+        order = rt.exercises.reduce((m, e) => Math.max(m, e.order), 0) + 1;
+      }
+      ex = rt.exercises.find((e) => e.order === order && e.name === name);
+      if (!ex) {
+        const clash = rt.exercises.find((e) => e.order === order);
+        if (clash && clash.superset === null) issue(`Pořadí ${fmtNum(order)} mají dva cviky: ${clash.name} a ${name}`);
+        ex = { name, order, superset: filled(r.superset) ? String(r.superset).trim() : null, rest: null, note: '', sets: [] };
+        rt.exercises.push(ex);
+        const info = model.exercises.get(name);
+        if (!info) issue(`Cvik ${name} není v listu Cviky`);
+        else if (!info.primary.length) issue(`Cvik ${name} nemá v listu Cviky partie (chybí pak ve svalové mapě)`);
+      }
+    } else if (!ex) {
+      issue('Řádek nemá Cvik a nad ním žádný cvik není');
+      return;
+    }
+
+    if (filled(r.rest)) {
+      const rest = parseTime(r.rest);
+      if (rest === null) issue(`Nečitelný Odpočinek „${r.rest}“`);
+      else ex.rest = rest;
+    }
+    if (filled(r.note) && !ex.note) ex.note = String(r.note);
+
+    let type = 'N';
+    if (filled(r.type)) {
+      type = TYPE_FROM_SHEET[nameKeyType(r.type)];
+      if (!type) {
+        issue(`Neznámý Typ „${r.type}“ (bere se jako normální)`);
+        type = 'N';
+      }
+    }
+    const reps = parseRange(r.reps);
+    if (filled(r.reps) && !reps) issue(`Nečitelná OPAK. „${r.reps}“`);
+    const time = parseTime(r.time);
+    if (filled(r.time) && time === null) issue(`Nečitelný ČAS „${r.time}“`);
+    const kg = parseNum(r.kg);
+    if (filled(r.kg) && kg === null) issue(`Nečitelná KG „${r.kg}“`);
+    const km = parseNum(r.km);
+    if (filled(r.km) && km === null) issue(`Nečitelné KM „${r.km}“`);
+
+    let count = 1;
+    if (filled(r.count)) {
+      const c = parseNum(r.count);
+      if (c === null || !Number.isInteger(c) || c < 1 || c > MAX_COUNT) issue(`Nečitelné Sérií „${r.count}“ (celé číslo 1 až ${MAX_COUNT})`);
+      else count = c;
+    }
+    for (let k = 0; k < count; k++) ex.sets.push({ type, kg, reps, time, km });
   });
   const list = [...byName.values()];
-  list.forEach((rt) => rt.exercises.sort((a, b) => a.order - b.order));
-  return list;
+  list.forEach((x) => x.exercises.sort((a, b) => a.order - b.order));
+  return { list, issues };
 }
+
+const nameKeyType = (v) => String(v).trim().toLowerCase();
+
+export const routineList = (model) => parseRoutines(model).list;
+
+// Problémy v listu Rutiny: [{ row, routine, text }]. Trénink jde začít i s nimi.
+export const validateRoutines = (model) => parseRoutines(model).issues;
 
 const letterOf = (name) => {
   const m = String(name || '').match(/tr[ée]nink\s+([A-Z])\b/i);
@@ -298,7 +415,7 @@ export function entryLine(ex, bw) {
   }
 }
 
-// Výpočet pod potvrzenou sérií: „20 × 2 × 9 × 2 = 720 kg“, „(86,3 × 1 + 0) × 10 = 863 kg“.
+// Výpočet pod potvrzenou sérií: „20 × 2 × 9 × 2 = 720 kg“, „(80 × 1 + 0) × 10 = 800 kg“.
 // U cviků na čas nic (do součtu se nepočítají).
 export function setCalc(set, ex, bw) {
   if (isTimeMode(ex.mode) || !set || !set.reps) return '';
@@ -315,5 +432,3 @@ export function setCalc(set, ex, bw) {
   if (ex.mode === MODE.SIDE) parts.push('2');
   return `${parts.join(' × ')} = ${vol} kg`;
 }
-
-export const fmtKg = (v) => `${fmtInt(v)} kg`;
