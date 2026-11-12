@@ -15,7 +15,7 @@ import { buildSummary } from './js/summary.js';
 import { renderImage, shareImage, copyText } from './js/strava.js';
 import { fileId, mediaUrl, prefetchMedia, uploadVideo, uploadPhoto, photoFromSavedVideo, fmtSize } from './js/media.js';
 
-export const VERSION = '0.7.0';
+export const VERSION = '0.7.1';
 
 const LAST_SUMMARY = 'reformer.summary'; // ID tréninku, jehož souhrn je otevřený (přežije nové načtení appky)
 
@@ -687,7 +687,8 @@ function Workout({ model, w, qs, update, onUpdate, onFinish, onDiscard, onHome, 
   const menuEx = menu && w.exercises.find((e) => e.key === menu);
   const typeSet = typeFor && w.exercises.find((e) => e.key === typeFor.exKey)?.sets.find((s) => s.id === typeFor.setId);
 
-  return html`<main class="workout">
+  // Obal přes celou obrazovku: dokument se nescrolluje, scrolluje jen <main> mezi lištami (viz styles.css .wshell)
+  return html`<div class="wshell">
     <header class="wbar">
       <button class="link" onClick=${onHome}>${w.edit ? 'Zrušit' : 'Úvod'}</button>
       <div class="wmid">
@@ -701,6 +702,7 @@ function Workout({ model, w, qs, update, onUpdate, onFinish, onDiscard, onHome, 
       </div>
       <button class="primary" onClick=${onFinish}>${w.edit ? 'Uložit' : 'Dokončit'}</button>
     </header>
+    <main class="workout">
     <div class="wtitle">
       <${AutoText} cls="title-input" value=${w.title} onInput=${(e) => onUpdate((cur) => W.patch(cur, (n) => { n.title = e.target.value.replace(/\n/g, ' '); }), false)} />
     </div>
@@ -714,7 +716,7 @@ function Workout({ model, w, qs, update, onUpdate, onFinish, onDiscard, onHome, 
       onType=${(exKey, setId) => setTypeFor({ exKey, setId })} toast=${toast} />`)}
     <button class="wide" onClick=${() => setPicker({ mode: 'add' })}>+ Přidat cvik</button>
     ${!w.edit && html`<button class="wide danger" onClick=${onDiscard}>Zahodit trénink</button>`}
-    <div class="spacer"></div>
+    </main>
 
     ${!w.edit && (w.watch ? html`<${WatchBar} w=${w} now=${now} onWatch=${onWatch} />` : html`<${RestBar} w=${w} onUpdate=${onUpdate} now=${now} />`)}
     <${Toast} text=${toastText || (undo ? 'Série smazána' : '')} action=${!toastText && undo ? 'Vrátit' : ''} onAction=${undoDelete} />
@@ -773,7 +775,7 @@ function Workout({ model, w, qs, update, onUpdate, onFinish, onDiscard, onHome, 
       </div>
       <button class="wide danger" onClick=${() => { if (deleteSet(typeFor.exKey, typeFor.setId)) setTypeFor(null); }}>Smazat sérii</button>
     </${Sheet}>`}
-  </main>`;
+  </div>`;
 }
 
 // ---------- dokončení ----------

@@ -217,9 +217,20 @@ await scenario('rutiny', async (go) => {
   // stopky: lišta nezakryje poslední tlačítko
   await sp.locator('.watch-ctl button').first().click();
   await page.clock.runFor(34000);
-  const bar = await page.locator('.watch-bar').evaluate((e) => e.getBoundingClientRect().height);
-  const spacer = await page.locator('.spacer').evaluate((e) => e.getBoundingClientRect().height);
-  assert.ok(spacer >= bar + 20, `spacer ${spacer} lišta ${bar}`);
+  // lišty stojí mimo scrollovaný obsah: dokument se nescrolluje, po doscrollování main jsou lišty na místě
+  // a poslední tlačítko je celé nad dolní lištou
+  const bars = await page.evaluate(() => {
+    const m = document.querySelector('main.workout');
+    m.scrollTop = m.scrollHeight;
+    const r = (sel) => document.querySelector(sel).getBoundingClientRect();
+    const last = [...m.querySelectorAll('button')].at(-1).getBoundingClientRect();
+    return { doc: document.scrollingElement.scrollHeight - innerHeight, scrolled: m.scrollTop, top: r('.wbar').top, barTop: r('.watch-bar').top, barBottom: r('.watch-bar').bottom, last: last.bottom, h: innerHeight };
+  });
+  assert.equal(bars.doc, 0, 'dokument se nesmí scrollovat');
+  assert.ok(bars.scrolled > 0, 'obsah se scrolluje v main');
+  assert.equal(bars.top, 0, 'horní lišta nahoře');
+  assert.equal(Math.round(bars.barBottom), bars.h, 'dolní lišta u spodního okraje');
+  assert.ok(bars.last <= bars.barTop, `poslední tlačítko ${bars.last} pod lištou ${bars.barTop}`);
   await page.locator('.watch-bar .primary').click();
   await sp.locator('.watch-ctl button').first().click();
   await page.clock.runFor(31000);

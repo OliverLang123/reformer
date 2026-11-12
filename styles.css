@@ -165,16 +165,42 @@ select { font: inherit; color: inherit; background: var(--surface-2); border: 1p
 
 /* ---------- trénink ---------- */
 
+/* Trénink: obal přes celou obrazovku. Dokument se nescrolluje vůbec, scrolluje jen main.workout
+   mezi horní lištou a dolní lištou (odpočinek, stopky). Lišty nejsou position: fixed ani sticky,
+   takže je iOS nemůže posunout (klávesnice, odraz na konci, posunutý viewport v PWA). */
+html:has(.wshell), html:has(.wshell) body {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+.wshell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+}
+main.workout {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  /* obsah dál nejvýš 640 px na střed jako ostatní obrazovky */
+  padding: 10px max(12px, calc((100% - 616px) / 2)) calc(env(safe-area-inset-bottom) + 24px);
+}
+
 .wbar {
-  position: sticky;
-  top: 0;
+  flex: none;
+  position: relative;
   z-index: 10;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin: calc(-12px - env(safe-area-inset-top)) -12px 10px;
-  padding: calc(env(safe-area-inset-top) + 8px) 12px 8px;
+  padding: calc(env(safe-area-inset-top) + 8px) max(12px, calc((100% - 616px) / 2)) 8px;
   background: var(--bg);
   border-bottom: 1px solid var(--line);
 }
@@ -270,11 +296,9 @@ select { font: inherit; color: inherit; background: var(--surface-2); border: 1p
 
 .add-set { display: block; width: 100%; margin-top: 8px; font-size: 15px; }
 
-.spacer { height: calc(env(safe-area-inset-bottom) + 130px); } /* vyšší než nejvyšší dolní lišta (stopky) */
-
 .rest-bar {
-  position: fixed;
-  left: 0; right: 0; bottom: 0;
+  flex: none; /* poslední položka v .wshell, pod scrollovaným obsahem */
+  position: relative;
   z-index: 20;
   display: flex;
   align-items: center;

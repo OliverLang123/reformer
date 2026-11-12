@@ -1,5 +1,9 @@
 # Změny
 
+## 0.7.1 (12. 11. 2026)
+
+Trénink: horní lišta a lišta odpočinku nebo stopek drží na místě i na iPhonu v PWA. Při tréninku se scrolluje jen obsah mezi lištami, ne celá stránka.
+
 ## 0.7.0 (připraveno 11. 11. 2026)
 
 - Synchronizace: obnovení dat nepřepíše čerstvě uložený trénink, selhávající položka neblokuje frontu, chyba odeslání je vidět a položku jde zahodit, appka hlídá verzi skriptu a sama načte novou verzi.
