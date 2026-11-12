@@ -15,7 +15,7 @@ import { buildSummary } from './js/summary.js';
 import { renderImage, shareImage, copyText } from './js/strava.js';
 import { fileId, mediaUrl, prefetchMedia, uploadVideo, uploadPhoto, photoFromSavedVideo, fmtSize } from './js/media.js';
 
-export const VERSION = '0.7.1';
+export const VERSION = '0.7.2';
 
 const LAST_SUMMARY = 'reformer.summary'; // ID tréninku, jehož souhrn je otevřený (přežije nové načtení appky)
 
@@ -390,12 +390,12 @@ function ExerciseCard({ w, ex, model, now, onUpdate, onMenu, onDetail, onRest, o
     <p class="entry">${entryLine(info, bw)}</p>
     ${ex.superset && html`<span class="ss-tag">Superset ${ex.superset}</span>`}
     ${pinned && html`<p class="pinned">📌 ${pinned}</p>`}
-    ${noteOpen && html`<${AutoText} cls="note" placeholder="Poznámka ke cviku" value=${ex.note}
+    ${noteOpen && html`<div class="forcoach"><span class="forcoach-icon" aria-hidden="true">💬</span><${AutoText} cls="note" placeholder="Jak to šlo, bolest, technika, co příště…" value=${ex.note}
       onInput=${(e) => onUpdate((cur) => W.patch(cur, (n) => { n.exercises.find((x) => x.key === ex.key).note = e.target.value; }), false)}
-      onBlur=${() => onUpdate((cur) => cur, true)} />`}
+      onBlur=${() => onUpdate((cur) => cur, true)} /></div>`}
     <div class="ex-tools">
       <button class="rest-chip" onClick=${() => onRest(ex.key)}>⏱ Odpočinek ${ex.rest ? fmtTime(ex.rest) : 'vypnutý'}</button>
-      ${!noteOpen && html`<button class="link small" onClick=${() => setNoteOpen(true)}>+ Poznámka</button>`}
+      ${!noteOpen && html`<button class="link small" onClick=${() => setNoteOpen(true)}>+ Pro trenéra</button>`}
     </div>
     <div class=${'set-row head' + (fields.length === 1 ? ' one' : '')}>
       <span>SÉRIE</span><span>MINULE</span>${fields.map((f) => html`<span>${head[f]}</span>`)}${fields.length === 1 && html`<span></span>`}<span>✓</span><span></span>
@@ -708,9 +708,9 @@ function Workout({ model, w, qs, update, onUpdate, onFinish, onDiscard, onHome, 
     </div>
     ${w.routineNote && html`<p class="pinned">📌 ${w.routineNote}</p>`}
     ${noteOpen
-      ? html`<${AutoText} cls="note wnote" placeholder="Poznámka k tréninku" value=${w.note || ''}
-          onInput=${(e) => onUpdate((cur) => W.patch(cur, (n) => { n.note = e.target.value; }), false)} />`
-      : html`<button class="link small" onClick=${() => setNoteOpen(true)}>+ Poznámka k tréninku</button>`}
+      ? html`<div class="forcoach wnote"><span class="forcoach-icon" aria-hidden="true">💬</span><${AutoText} cls="note" placeholder="Poznámka k tréninku pro trenéra" value=${w.note || ''}
+          onInput=${(e) => onUpdate((cur) => W.patch(cur, (n) => { n.note = e.target.value; }), false)} /></div>`
+      : html`<button class="link small" onClick=${() => setNoteOpen(true)}>+ Poznámka k tréninku pro trenéra</button>`}
     ${w.exercises.map((ex) => html`<${ExerciseCard} key=${ex.key} w=${w} ex=${ex} model=${model} now=${now}
       onUpdate=${onUpdate} onMenu=${setMenu} onDetail=${setDetail} onRest=${setRestFor} onWatch=${onWatch} onDelete=${deleteSet}
       onType=${(exKey, setId) => setTypeFor({ exKey, setId })} toast=${toast} />`)}
@@ -796,8 +796,8 @@ function Finish({ model, w, onSave, onBack, onDiscard }) {
       </div>
       ${st.prs.length > 0 && html`<h3>Nová maxima</h3><ul class="prs">${st.prs.map((p) => html`<li>🏆 ${p.exercise} ${fmtBest(p, exerciseInfo(model, p.exercise))}</li>`)}</ul>`}
       ${open > 0 && html`<p class="warn">${open} ${plural(open, 'nepotvrzená série se neuloží', 'nepotvrzené série se neuloží', 'nepotvrzených sérií se neuloží')}.</p>`}
-      <label class="form">Poznámka k tréninku
-        <textarea rows="3" value=${note} onInput=${(e) => setNote(e.target.value)}></textarea>
+      <label class="form">💬 Poznámka k tréninku pro trenéra
+        <textarea class="forcoach-field" rows="3" value=${note} onInput=${(e) => setNote(e.target.value)}></textarea>
       </label>
     </section>
     ${st.sets > 0
@@ -937,12 +937,12 @@ function PastWorkout({ model, id, onBack, onEdit, onDelete, toast }) {
         <div><small>Objem</small><strong>${fmtInt(s.image.totalVolumeKg)} kg</strong></div>
         <div><small>Série</small><strong>${sets.length}</strong></div>
       </div>`}
-      ${w.note && html`<p class="pinned">${w.note}</p>`}
+      ${w.note && html`<p class="forcoach-text">💬 ${w.note}</p>`}
       ${groups.map((g) => {
         const info = exerciseInfo(model, g.name);
         return html`<div class="past-ex">
           <strong>${g.name}</strong>${g.superset && html` <span class="ss-tag">Superset ${g.superset}</span>`}
-          ${g.note && html`<small class="muted">${g.note}</small>`}
+          ${g.note && html`<small class="muted">💬 ${g.note}</small>`}
           <ol>${g.sets.map((x) => {
             const calc = setCalc(x, info, bw);
             return html`<li>${typeTag[x.type] && html`<b class="tag">${typeTag[x.type]}</b> `}${fmtSet(x, info.mode)}${x.rir !== null ? ` · ${x.rir} v záloze` : ''}

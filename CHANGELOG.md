@@ -1,5 +1,9 @@
 # Změny
 
+## 0.7.2 (12. 11. 2026)
+
+Poznámky pro trenéra: u cviku odkaz "+ Pro trenéra" s nápovědou (jak to šlo, bolest, technika, co příště), poznámka k tréninku se jmenuje "Poznámka k tréninku pro trenéra". Poznámky mají 💬 a modrý podklad, pokyn z rutiny zůstává 📌 oranžově. Ukládání se nemění.
+
 ## 0.7.1 (12. 11. 2026)
 
 Trénink: horní lišta a lišta odpočinku nebo stopek drží na místě i na iPhonu v PWA. Při tréninku se scrolluje jen obsah mezi lištami, ne celá stránka.

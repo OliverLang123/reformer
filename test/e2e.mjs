@@ -90,8 +90,8 @@ await scenario('trenink', async (go) => {
   await saved(page);
 
   // poznámka k tréninku jde psát během tréninku
-  await page.getByText('+ Poznámka k tréninku').click();
-  await page.locator('.wnote').fill('Zkušební poznámka');
+  await page.getByText('+ Poznámka k tréninku pro trenéra').click();
+  await page.locator('.wnote textarea').fill('Zkušební poznámka');
 
   // dokončit a uložit
   await page.locator('.wbar .primary').click();
@@ -260,7 +260,9 @@ await scenario('novy-cvik', async (go) => {
   const order = api.calls.map((x) => x.action).filter((a) => a === 'saveExercise' || a === 'saveWorkout');
   assert.equal(order[0], 'saveExercise');
   // poznámka má písmo 16 px a tlačítka touch-action manipulation
-  await c.getByText('+ Poznámka').click();
+  await c.getByText('+ Pro trenéra').click();
+  assert.equal(await c.locator('textarea.note').getAttribute('placeholder'), 'Jak to šlo, bolest, technika, co příště…');
+  assert.equal(await c.locator('.forcoach .forcoach-icon').textContent(), '💬');
   assert.equal(await c.locator('textarea.note').evaluate((e) => getComputedStyle(e).fontSize), '16px');
   assert.equal(await page.evaluate(() => getComputedStyle(document.body).touchAction), 'manipulation');
 });
